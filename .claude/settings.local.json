@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m http.server 8765 --bind 127.0.0.1)",
+      "Bash(npx -y puppeteer-core --version)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8765/index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8765/js/main.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://127.0.0.1:8765/assets/ui/menu_states/title-menu-load.png\")",
+      "Bash(curl:*)",
+      "Bash(kill %1)",
+      "Bash(node -e ':*)",
+      "Bash(wc:*)",
+      "Bash(node -c \"C:/Users/dtm92/OneDrive/Wormp World Zendoria/js/game.js\")",
+      "Bash(node --check \"C:/Users/dtm92/OneDrive/Wormp World Zendoria/js/game.js\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(node --check \"C:/Users/dtm92/OneDrive/Wormp World Zendoria/js/npc.js\")",
+      "Bash(node --check \"C:/Users/dtm92/OneDrive/Wormp World Zendoria/js/world.js\")",
+      "Bash(node --check \"C:/Users/dtm92/OneDrive/Wormp World Zendoria/js/assets.js\")",
+      "Bash(python3:*)",
+      "Bash(python -c ':*)",
+      "Bash(python)",
+      "Bash(node --check /c/Users/dtm92/OneDrive/Zendoria/js/game.js)",
+      "Bash(node:*)",
+      "Bash(python serve.py 8765)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}

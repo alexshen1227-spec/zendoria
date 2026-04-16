@@ -1,0 +1,182 @@
+## DO NOTE DELETE, UPDATE, OR CHANGE THE FOLLOWING INSTRUCTIONS.
+Welcome to the project. You will be working with other AI, or you might be the first. This folder contains infos and code you will be working on to achieve the goal. You should update this file with areas you are going to work on, glitches, improvements, the goal, vibe, everything, here, for the next AI to read.
+
+**CRITICAL AI DIRECTIVE - CREATIVE FREEDOM:** You are encouraged to be creative. While you must respect the core Zendoria lore, you have full permission to add new features, suggest cool weapon types, invent minor enemies, or change mechanics if you think it makes the RPG more fun, adventurous, or visually striking. If you add something great, document it in this file. Further more, please organize everything so all the pictures go in the organized place for other AI to see.
+
+## You may change, add, delete, or update the follow texts.
+
+> **TODO for Codex / ChatGPT:** Remove / clean the background on the saving tomb source picture. It is *an animation strip, not a single frame*, and lives inside `assets/` (see `assets/reference/provided_pixel_art/Stone_pillar_tomb_design.png`). When producing the runtime asset please split the animation frames and strip the background (it will likely need alpha cleanup beyond the runtime `removeEdgeMatte` flood-fill). Drop the cleaned frames into `assets/sprites/environment/` (e.g. `tombstone_idle_strip.png`) so the game can use a `SpriteSheet` instead of the single still currently loaded at runtime.
+
+> **TODO for Codex / ChatGPT:** The new desert realm currently uses the temporary objective text `Explore Desert`. This is still only a placeholder exploration prompt and needs a future story / quest / objective pass in `AI_CONTEXT_ZENDORIA.md.txt` + game logic once the Index zone gets real content.
+
+
+# PROJECT OVERVIEW: ZENDORIA (2D PIXEL ADVENTURE RPG)
+
+## 1. The Goal & Vibe
+**The Goal:** Build a fully animated 2D pixel-art adventure RPG set in the cosmic-fantasy world of Zendoria. The game will eventually feature a rich quest system, discoverable gear, and deep exploration.
+**The Vibe:** Classic top-down or slightly isometric 2D pixel adventure. Think exploration and questing in the spirit of Zelda or Secret of Mana, mixed with the quirky danger of Pokemon or Earthbound. The world should feel vast, mysterious, and slightly unstable.
+**Art Style:** 2D pixel art with smooth sprite animation. The starting island should feel vibrant, hand-crafted, and a little uncanny because reality is flawed there. Glowing flora, warped stone, and cosmic shimmer are all on-tone.
+
+## 2. Core Lore Context (Zendoria Mechanics)
+* **The Wormps:** The primary creatures and enemies of this universe. They possess elemental powers and strange anatomies, often including void-like or impossible mouths.
+  * *Starter Enemies:* Minor Wormp variants that are easy to animate and fight in the early prototype.
+* **The World:** Reality in Zendoria is not stable. Ancient factions, including the Zen'Korah, and legendary figures such as the Four Masters shaped the world.
+* **Weapons & Quests:** Players find unique weapons, often with elemental or cosmic origins. Quests should come from curious townsfolk, wanderers, shrines, or environmental discoveries.
+
+## 3. Current Scope: The Starting Island Prototype
+While the game should eventually become massive, **we are currently ONLY focusing on the foundation.** The immediate goal is to make the Starting Island feel like a real playable opening slice.
+
+**Mechanics to Build First:**
+* **2D Player Controller:** Smooth 4-direction or 8-direction movement.
+* **Pixel Animations:** Hook up sprite sheets for idle, walk, and a basic weapon swing.
+* **Basic Combat & Weapons:** Simple melee hitbox system with readable feedback.
+* **Enemy AI:** A basic wandering/chasing starter Wormp with hit and death responses.
+* **The Starting Island Environment:** Tilemap or tile-like authored environment with grass, warped rocks, water boundaries, and a few landmarks.
+
+---
+
+## CURRENT STATUS & HANDOFF
+
+### Current Phase: Phase 1 - The Starting Island Prototype
+*(AI Agents: Update this section with your latest progress before ending your task.)*
+
+**Completed (2026-04-14, environmental + UI + death pass):**
+* New realm split: Driftmere now has a portal at the top-right of the eastern island that sends the player to `INDEX`, a large placeholder desert realm. The return portal on the Index side sends the player back to Driftmere.
+* HUD, minimap, fullscreen map, save/checkpoint restore, and objective state are now realm-aware. Saves persist `currentRealmId`, `hasEnteredIndex`, and per-realm enemy/spawner state so reloads land in the correct realm.
+* The current Index objective is intentionally the temporary placeholder `EXPLORE DESERT` until a future content pass replaces it with a real quest.
+* Index now has authored enemy packs instead of an empty placeholder map. Two cleaned desert enemy sheets were extracted from the user-provided composite guide image: `Sunscarab` (fast low-HP bug hunter) and `Dune Warden` (slower sturdier melee hunter).
+* Enemy spawning / save restore / nearby HUD naming now use typed enemy kinds instead of a single hardcoded Blightworm path. Legacy saves still fall back to `blightworm` if an older enemy entry has no `kind`.
+* Rendering now y-sorts props, enemies, player, Elara, and the new tombstone against their bottom edge in `_drawEntitiesSorted` (see `js/game.js`). Trees and tall foliage correctly overlap entities that move behind them.
+* Prop collision boxes were tightened to the visual trunk: `World._buildPropColliders` caps blocking props at a narrow `trunkW` (max 10 px) and 4 px `trunkH`, so the player walks around only the base of trees.
+* NPC/tombstone collision: `World.setEntityColliders(...)` accepts dynamic colliders; `Game._refreshEntityColliders` registers Elara and the tombstone. Elara gained `getCollider()` in `js/npc.js`.
+* New `js/tombstone.js`: an eastern-island checkpoint stone placed at `world.tombstoneSpawn = 46*TILE, 15*TILE`. Pressing `E` while overlapping its interact rect calls `_activateTombstoneSave`, which fully restores HP and records an AAA-style named checkpoint.
+* Checkpoints persist as a rolling list (max 6) under `localStorage['zendoria-checkpoints-v1']` with label + timestamp + full game snapshot. `_readCheckpoints` / `_createCheckpoint` manage the ring buffer.
+* Minimap now draws live in the HUD at top-right by sampling `world.map` into a parchment-style thumbnail with a pulsing player pin and a tombstone pin. A small `M` hint sits on the minimap.
+* Pressing `M` opens a polished fullscreen map (`_drawWorldMap`) using `assets/reference/provided_pixel_art/Map.jpg` inside an ornate brass frame with a glowing "YOU ARE HERE" marker. `M` / `Esc` / `Space` closes it.
+* Player attack is now also bound to Left Click: `js/input.js` exposes `wasLeftClicked()` / `isLeftHeld()`, and `js/player.js` triggers `_startAttack` on any of `Space` / `J` / LMB.
+* YOU DIED flow: when `player.health <= 0`, `_triggerDeath` starts a 2.4s slow fade-in over a red-black vignette. `A`/`D` or arrows toggle between `You_Died (Quit).png` and `You_Died (Reload).png`; Enter confirms; a short fade-out plays before the transition.
+* Quit returns to the title menu; Reload opens a checkpoint submenu (`_drawCheckpointList`) where `Up/Down` + `Enter` pick a saved checkpoint and restart play with full HP at that snapshot.
+* `js/assets.js` added a shared `removeEdgeMatte({ mode: 'auto' })` that flood-fills either light or dark matte depending on which dominates the corners — used for the tombstone so the concept art's background drops out cleanly. The death-screen PNGs are loaded at the URL-encoded paths.
+* Bumped `index.html` script version to `v=19` so the no-cache serve path reloads the new bundle.
+
+**Prior completed (2026-04-14, pre-death pass):**
+* The project remains a browser-playable HTML5 Canvas + ES Module build.
+* The first playable 10 seconds are now the main focus and have been upgraded into a mini game slice instead of a pure engine test.
+* The title screen now uses a static title background plus runtime menu rows instead of swapping whole-screen menu-state images.
+* The `NEW GAME` arrow glitch and the brief black flash between menu options were fixed by removing the old stacked image crossfade path and replacing it with a runtime title menu.
+* All four title actions now do something with `Enter` or `Space`:
+  * `New Game` starts a fresh run.
+  * `Load Game` reads the latest autosave from localStorage if one exists.
+  * `Options` opens a settings modal and can toggle sound + tutorial hints.
+  * `Exit` opens a clear exit panel for the browser build.
+* A title intro voice now plays once per full page refresh, fades out on `New Game`, `Load Game`, and `Options`, and stays untouched on `Exit`.
+* In-game music now exists as a looping gameplay track with fade in / fade out behavior and respects the shared sound toggle.
+* An in-game settings / pause panel now exists on `Esc` with `Resume`, `Sound`, `Hints`, and `Return to Title`.
+* Runtime asset loading is now async and now preloads the title UI + gameplay art, so the title prompt can show loading state and fail clearly if core art goes missing.
+* The placeholder player rectangles were replaced with cleaned pixel-art sprite assets generated from the provided image drop.
+* The Shardfang starter attack is now playable. `Space` or `J` swings the weapon, plays the blue slash FX, and applies a melee hitbox.
+* A first enemy encounter now exists: one Blightworm near the warped crystal with idle, wander, chase, contact damage, hit-stun, knockback, death, and a nearby enemy health readout.
+* The HUD now shows location, weapon readiness, player HP, objective text, attack hinting, and a short toast banner for combat feedback.
+* Gameplay HUD text now uses a bitmap pixel-font path instead of blurry browser canvas text.
+* Driftmere Isle visuals were polished for the opening pass with stronger shoreline foam, richer grass detail, small mushrooms/sparkles, a campfire, signpost, corrupted patch, quest beacon, and a cleaner screen frame.
+* The Echo Trail effect was kept, but it now trails the real player sprite instead of the placeholder body.
+* Elara was made reliable and readable in the opener: clearer placement, no idle blue aura, and sharper/crisper dialog presentation.
+* Elara dialog art now strips its black matte correctly, and the conversation panel is drawn through a separate crisp overlay instead of being blurred by the gameplay canvas downscale.
+* A no-cache local server / launcher flow now exists via `serve.py` and the updated `launch.bat`, which avoids stale browser JS/assets during iteration.
+* Driftmere Isle now connects east into a much larger second island, with the route currently reading as a natural land causeway rather than a placed bridge prop.
+* User-supplied foliage art was extracted into transparent environment props and is now used for large trees, bushes, reeds, crystals, and glowing nest growths around both islands.
+* The eastern island adds more fixed Blightworms plus three visible enemy nest points that can spawn new enemies on roughly 15-second timers with local/global caps.
+* Objective flow now continues past Elara: talk to Elara, head east, then scout the far isle.
+* A headless browser pass was run after these changes. The opening view, eastward crossing, eastern island framing, and timed nest spawning were all verified live before handoff.
+* A follow-up polish pass re-spaced the northern tree / bush band so it sits more cleanly on the island instead of bunching against the HUD edge, and enemy spawning now relocates worms to the nearest open ground if a requested point is blocked.
+* Blightworms also gained a small obstacle-recovery sidestep when chase movement pins against terrain, and repeated browser checks verified that both fixed enemies and timer-spawned enemies can move after spawning.
+* A later composition cleanup pass focused specifically on the user screenshot issues: tall props no longer clip into the opening HUD, the obvious shoreline/floating-tree placements were moved inward, and both eastward crossing approaches were cleared so traversal reads before combat.
+* `js/world.js` now applies internal prop-placement keepouts for tall scenery, while a few manually curated inland trees are allowed back in to keep the islands lush instead of empty.
+* The eastern enemy layout was adjusted again so fixed worms and nest nodes sit on clearer open ground, and a deterministic browser check forced a nest timer to confirm that a spawned Blightworm can both appear and move in the cleaned-up layout.
+* The bridge prop was later removed entirely at user request, the crossing gap was filled into a natural land causeway, and the shoreline birch beside Elara was removed to clean up that opening view.
+* A follow-up browser pass widened that new causeway with extra sand/grass support so it no longer reads like a dirt strip floating over water.
+
+**Provided Pixel Art Added To Workspace (keep these paths stable for future AI):**
+* Original user-supplied references copied here untouched:
+  * `assets/reference/provided_pixel_art/player_walk_source.png`
+  * `assets/reference/provided_pixel_art/blightworm_source.png`
+  * `assets/reference/provided_pixel_art/desert_enemy_sheet_source.png`
+  * `assets/reference/provided_pixel_art/shardfang_sword_source.png`
+  * `assets/reference/provided_pixel_art/slash_fx_source.png`
+  * `assets/reference/provided_pixel_art/island_tileset_source_a.png`
+  * `assets/reference/provided_pixel_art/island_tileset_source_b.png`
+  * `assets/reference/provided_pixel_art/title_menu_load_source.png`
+  * `assets/reference/provided_pixel_art/title_menu_options_source.png`
+  * `assets/reference/provided_pixel_art/title_menu_exit_source.png`
+  * `assets/reference/provided_pixel_art/settings_panel_source.png`
+  * `assets/reference/provided_pixel_art/zendoria_title_source.png`
+  * `assets/reference/provided_pixel_art/bridge_source.png`
+  * `assets/reference/provided_pixel_art/foliage_sheet_source.png`
+  * `assets/reference/provided_audio/title_intro_voice_source.mp3`
+  * `assets/reference/provided_audio/battle_theme_source.mp3`
+* Cleaned runtime-ready assets generated from those references:
+  * `assets/sprites/player/driftwalker_walk_strip.png`
+  * `assets/sprites/player/driftwalker_idle.png`
+  * `assets/sprites/enemies/blightworm_sheet.png`
+  * `assets/sprites/enemies/sunscarab_strip.png`
+  * `assets/sprites/enemies/dune_warden_strip.png`
+  * `assets/sprites/weapons/shardfang_icon.png`
+  * `assets/sprites/weapons/shardfang_slash_strip.png`
+  * `assets/ui/title-screen.png`
+  * `assets/ui/title_menu/new-game-idle.png`
+  * `assets/ui/title_menu/new-game-active.png`
+  * `assets/ui/title_menu/load-game-idle.png`
+  * `assets/ui/title_menu/load-game-active.png`
+  * `assets/ui/title_menu/options-idle.png`
+  * `assets/ui/title_menu/options-active.png`
+  * `assets/ui/title_menu/exit-idle.png`
+  * `assets/ui/title_menu/exit-active.png`
+  * `assets/ui/title_menu/pointer.png`
+  * `assets/ui/panels/settings-banner.png`
+  * `assets/ui/fonts/pixel-font.png`
+  * `assets/sprites/environment/bridge_clean.png`
+  * `assets/sprites/environment/foliage_sheet_clean.png`
+  * `assets/sprites/environment/foliage_prop_00.png` through `assets/sprites/environment/foliage_prop_19.png`
+  * `assets/sprites/environment/foliage_manifest.csv`
+  * `assets/sprites/environment/foliage_preview.png`
+  * `assets/audio/voice/title-intro-cornelius.mp3`
+  * `assets/audio/music/driftmere-battle-loop.mp3`
+  * `assets/sprites/environment/index_portal.png`
+* The environment tile references are now safely inside the project for future AI use, but the island terrain is still mostly drawn procedurally in `js/world.js` rather than using literal tile extraction.
+
+**Starting Island Design: Driftmere Isle**
+* A small verdant island at the edge of the known world. Bioluminescent waters, warped rocks, glowing Flaw Crystals, and a lightly corrupted path hint at Zendoria's unstable reality.
+* The current opener starts around a campfire on the island path and points the player toward a first Blightworm near a warped crystal patch.
+* The route now extends east into a larger second island through a natural land causeway, which keeps the prototype's sense of expansion without the pseudo-isometric bridge mismatch.
+* The eastern island uses the extracted tree / bush / crystal prop art and includes corrupted nest zones that keep the area active over time instead of ending after a single fight.
+* Strong next location ideas: a villager camp, elder note, shrine beside the crystal path, or a small fishing cove.
+
+**Starting Weapon Concept: The Shardfang Dagger**
+* A jagged crystalline dagger - a fragment of a Shardwing Wyvern's crystal talon that washed ashore during the last Rain of Echoes.
+* The current attack is fast, short-range, and uses the supplied blue slash FX. It already reads well as a first weapon and can be upgraded later into combos, charged swings, or elemental variants.
+
+**Known Glitches / Bugs:**
+* The supplied hero art is a side-view walk sheet. Current compromise: left is mirrored correctly, but up/down movement still reuses the same body art while the slash FX rotates per direction.
+* The provided Blightworm sheet works for the first fight, but the lower-row frames are currently used as generic hurt/death states rather than a carefully authored animation state machine.
+* Browser automation was run in this pass, but a future AI should still manually eyeball the live build if they heavily change the eastward crossing, world framing, or prop density.
+* Title menu uses whole-screen state swaps from `assets/ui/menu_states/` (one full title image per selection) plus a clean custom pointer overlay (`assets/ui/title_menu/pointer.png`) placed via `.title-pointer-overlay` in CSS. The baked-in arrows inside the menu_states images are slightly inconsistent per state (AI-generated art quirk); the overlay pointer is the "authoritative" indicator. Do NOT reintroduce per-row label swaps — that created a visible double menu and was rejected.
+* Title screen fills the viewport: `.title-shell` in `css/style.css` uses `min(100vw, calc(100vh * 2752 / 1536))` with matching height to letterbox rather than overflow.
+* Audio autoplay: the wizard voice (`assets/audio/voice/title-intro-cornelius.mp3`) and battle music (`assets/audio/music/driftmere-battle-loop.mp3`) both require a user gesture on modern browsers. `Game._setupGestureUnlock()` attaches a persistent keydown/pointerdown listener that resumes `audioCtx` and (re)tries the title voice until `titleVoicePlayedThisPage` flips true. Voice only plays once per page load and never replays when returning to title from in-game.
+* `ReadMeForContext1 (DO NOT UPDATE THIS).txt` should remain untouched.
+
+**Areas for Improvement / Refactoring:**
+* Replace the current side-view player compromise with a proper top-down directional player sheet and matching attack poses.
+* Convert Driftmere Isle from procedural draw calls toward a deeper authored tile-and-prop pipeline; the world now uses extracted environment props, but the base terrain itself is still generated procedurally in `js/world.js`.
+* Add more structure around win/fail states, NPC hooks, quest text, and audio cues.
+* Consider pre-rendering map chunks or static prop layers to an offscreen canvas if the island grows much beyond the current prototype.
+* The timed enemy nests currently use simple radius/cap logic. A future AI could turn them into destroyable objectives, wave systems, or clearer corrupt-growth encounters.
+
+**Task for the Next AI:**
+1. Replace the current side-view player compromise with a proper top-down directional sheet, or generate matching up/down frames that fit the current cleaned asset scale.
+2. Add a real authored reason to head east: villager camp, shrine, ruined outpost, lore pickup, or another NPC on the eastern island.
+3. Decide whether the eastern enemy nests should stay as infinite pressure or become destroyable progression targets with rewards.
+4. Replace the temporary Index objective text `EXPLORE DESERT` with a real quest once the desert realm gets an authored hook, NPC, ruin, boss, or lore payoff.
+5. If world art gets another major pass, deepen the causeway and shoreline transition so the eastward route feels even more authored.
+6. Add additional SFX, combat hit sounds, ambient island audio, or nest-specific audio if better sound assets become available.
+7. If the eastern island or Index grows again, consider offscreen pre-rendering for the static prop layers before adding many more trees / bushes / structures.
+*(Creative freedom: the eastward route now gives the prototype a real "next zone" feeling, and the new Index portal can now lead into a shrine, ruin chain, sand-swept outpost, or buried vault.)*

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Zendoria - Driftmere Isle</title>
+    <link rel="stylesheet" href="css/style.css?v=15">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" aria-label="Zendoria game canvas"></canvas>
+        <div id="dialog-overlay" class="dialog-overlay hidden" aria-hidden="true">
+            <div class="dialog-panel-shell">
+                <canvas class="dialog-panel-canvas" data-dialog-canvas></canvas>
+                <div class="dialog-continue hidden" data-dialog-continue>&gt; SPACE</div>
+            </div>
+        </div>
+    </div>
+    <div id="game-overlay" class="overlay">
+        <div class="title-shell">
+            <img class="title-menu-image" data-title-menu-image src="assets/ui/menu_states/title-menu-new-game.png?v=20260414-elara-fix" alt="Zendoria title screen">
+            <div class="title-pointer-overlay" data-title-pointer-overlay>
+                <div class="title-pointer-row is-selected" data-title-row="new-game">
+                    <span class="title-pointer" aria-hidden="true"></span>
+                </div>
+                <div class="title-pointer-row" data-title-row="load">
+                    <span class="title-pointer" aria-hidden="true"></span>
+                </div>
+                <div class="title-pointer-row" data-title-row="options">
+                    <span class="title-pointer" aria-hidden="true"></span>
+                </div>
+                <div class="title-pointer-row" data-title-row="exit">
+                    <span class="title-pointer" aria-hidden="true"></span>
+                </div>
+            </div>
+            <div class="title-debug" data-title-debug>v6</div>
+            <div class="title-footer">
+        <p class="title-help" data-loading-label>Loading Driftmere Isle build...</p>
+            </div>
+            <div class="title-modal hidden" data-title-modal>
+                <div class="panel-card">
+                    <img class="panel-banner hidden" data-title-modal-banner src="assets/ui/panels/settings-banner.png?v=20260414-elara-fix" alt="Settings">
+                    <h2 class="title-modal-title" data-title-modal-title></h2>
+                    <div class="settings-list hidden" data-title-settings>
+                        <div class="settings-row is-selected" data-title-setting-row="sound">
+                            <span class="settings-name">Sound</span>
+                            <span class="settings-value" data-title-setting-value="sound">On</span>
+                        </div>
+                        <div class="settings-row" data-title-setting-row="hints">
+                            <span class="settings-name">Hints</span>
+                            <span class="settings-value" data-title-setting-value="hints">On</span>
+                        </div>
+                    </div>
+                    <p class="title-modal-body" data-title-modal-body></p>
+                    <p class="title-modal-foot" data-title-modal-foot></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="death-overlay" class="death-overlay hidden" aria-hidden="true">
+        <img class="death-image death-image-quit is-active" data-death-image-quit src="assets/reference/provided_pixel_art/You_Died (Quit).png" alt="You Died - Quit highlighted">
+        <img class="death-image death-image-reload" data-death-image-reload src="assets/reference/provided_pixel_art/You_Died (Reload).png" alt="You Died - Reload highlighted">
+        <div class="death-vignette" data-death-vignette></div>
+        <div class="death-checkpoints hidden" data-death-checkpoints>
+            <h2 class="death-checkpoints-title">Select Checkpoint</h2>
+            <ul class="death-checkpoints-list" data-death-checkpoints-list></ul>
+            <p class="death-checkpoints-foot">Up / Down to choose &middot; Enter loads &middot; Esc back</p>
+        </div>
+    </div>
+    <div id="pause-overlay" class="pause-overlay hidden">
+        <div class="pause-panel">
+            <img class="panel-banner" src="assets/ui/panels/settings-banner.png?v=20260414-elara-fix" alt="Settings">
+            <div class="settings-list pause-settings" data-pause-settings>
+                <div class="settings-row is-selected" data-pause-row="resume">
+                    <span class="settings-name">Resume</span>
+                    <span class="settings-value" data-pause-value="resume">Go</span>
+                </div>
+                <div class="settings-row" data-pause-row="sound">
+                    <span class="settings-name">Sound</span>
+                    <span class="settings-value" data-pause-value="sound">On</span>
+                </div>
+                <div class="settings-row" data-pause-row="hints">
+                    <span class="settings-name">Hints</span>
+                    <span class="settings-value" data-pause-value="hints">On</span>
+                </div>
+                <div class="settings-row" data-pause-row="controls">
+                    <span class="settings-name">Controls</span>
+                    <span class="settings-value" data-pause-value="controls">View</span>
+                </div>
+                <div class="settings-row" data-pause-row="return-title">
+                    <span class="settings-name">Return To Title</span>
+                    <span class="settings-value" data-pause-value="return-title">Leave</span>
+                </div>
+            </div>
+            <p class="pause-help" data-pause-help>Esc resumes. Left or right toggles sound and hints.</p>
+            <div class="controls-panel hidden" data-controls-panel>
+                <h2 class="controls-panel-title">Controls</h2>
+                <ul class="controls-panel-list">
+                    <li><span class="ctrl-key">W A S D / Arrows</span><span class="ctrl-desc">Move</span></li>
+                    <li><span class="ctrl-key">Space / J / Left Click</span><span class="ctrl-desc">Attack</span></li>
+                    <li><span class="ctrl-key">E</span><span class="ctrl-desc">Interact / Save / Use portals</span></li>
+                    <li><span class="ctrl-key">M</span><span class="ctrl-desc">Open world map (after earning it)</span></li>
+                    <li data-controls-row="ability-skilltree" class="ability-locked"><span class="ctrl-key">K</span><span class="ctrl-desc">Open skill tree &middot; spend points</span></li>
+                    <li><span class="ctrl-key">Esc</span><span class="ctrl-desc">Pause menu / back</span></li>
+                    <li><span class="ctrl-key">Enter / Space</span><span class="ctrl-desc">Confirm in menus</span></li>
+                </ul>
+                <p class="controls-panel-foot">Press Esc, Enter, or Space to return.</p>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="js/main.js?v=35"></script>
+</body>
+</html>
