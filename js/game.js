@@ -352,6 +352,8 @@ export class Game {
         this.deathState = null;
 
         this.xpPopups = [];
+        this.particles = [];
+        this.hitStopTimer = 0;
         this.levelUpAnim = null;
         this.levelUpFlash = 0;
         this.expBarPulse = 0;
@@ -1089,8 +1091,61 @@ export class Game {
             return;
         }
 
+        // Brief hit-stop: freeze entity simulation for a few frames after a solid hit
+        // so each strike lands with weight. Particles still update so sparks feel alive.
+        if (this.hitStopTimer > 0) {
+            this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
+            this._updateParticles(dt);
+            this.toastTimer = Math.max(0, this.toastTimer - dt);
+            return;
+        }
+
         this.player.update(dt, this.input, this.world);
         if (this.tombstone) this.tombstone.update(dt);
+
+        // Emit dash particles right after a dash starts (player sets _dashJustStarted).
+        if (this.player._dashJustStarted) {
+            this.player._dashJustStarted = false;
+            const px = this.player.cx;
+            const py = this.player.cy + 8;
+            const ang = this._directionToAngle(this.player.direction) + Math.PI; // back-spray
+            this._spawnParticles(px, py, {
+                count: 14,
+                angle: ang,
+                spread: Math.PI * 0.5,
+                minSpeed: 40,
+                maxSpeed: 120,
+                friction: 0.82,
+                gravity: 40,
+                life: 0.42,
+                colors: ['#bde4ff', '#8fffe1', '#ffffff', '#6fc3ff'],
+                size: 2,
+            });
+            this.screenShake = Math.max(this.screenShake, 0.45);
+            this._playBeep(620, 0.07, 'sawtooth', 0.1);
+            this._playBeep(960, 0.06, 'triangle', 0.08);
+        }
+
+        // Ambient dust when moving (adds life to motion).
+        if (this.player.moving && Math.random() < dt * 6) {
+            this._spawnParticles(
+                this.player.cx + (Math.random() - 0.5) * 6,
+                this.player.y + this.player.h - 4,
+                {
+                    count: 1,
+                    angle: -Math.PI / 2,
+                    spread: Math.PI * 0.35,
+                    minSpeed: 4,
+                    maxSpeed: 14,
+                    friction: 0.92,
+                    gravity: -8,
+                    life: 0.45,
+                    colors: ['rgba(200, 220, 230, 0.55)', 'rgba(160, 200, 220, 0.4)'],
+                    size: 1,
+                    shrink: true,
+                },
+            );
+        }
 
         for (const enemy of this.enemies) {
             enemy.update(dt, this.player, this.world);
@@ -1102,6 +1157,7 @@ export class Game {
         this._updateObjectiveState(dt);
         this._updateNpcInteraction();
         this._updateHudInput();
+        this._updateParticles(dt);
         this.camera.follow(this.player, this.world.pixelW, this.world.pixelH);
 
         if (this.player.health <= 0 && !this.deathState) {
@@ -1404,11 +1460,139 @@ export class Game {
                     ? `${enemy.toastLabel} PURGED`
                     : `${enemy.toastLabel} STAGGERED`;
                 this.toastTimer = 1.2;
+
+                // Juicy hit feedback: spark particles on hit, bigger burst on kill,
+                // plus a brief hit-stop to make each strike feel weighty.
+                const hb = enemy.getHitbox();
+                const hitX = hb.x + hb.w / 2;
+                const hitY = hb.y + hb.h / 2;
+                const hitAngle = this._directionToAngle(this.player.attackDirection);
+                this._spawnParticles(hitX, hitY, {
+                    count: 8,
+                    angle: hitAngle,
+                    spread: Math.PI * 0.55,
+                    minSpeed: 50,
+                    maxSpeed: 130,
+                    friction: 0.86,
+                    gravity: 60,
+                    life: 0.32,
+                    colors: ['#ffffff', '#ffe78a', '#a6ffcb'],
+                    size: 2,
+                });
+                this.hitStopTimer = Math.max(this.hitStopTimer, 0.035);
+
+                if (slain) {
+                    this._spawnParticles(hitX, hitY, {
+                        count: 18,
+                        spread: Math.PI * 2,
+                        minSpeed: 30,
+                        maxSpeed: 140,
+                        friction: 0.9,
+                        gravity: 80,
+                        life: 0.65,
+                        colors: ['#8f52e0', '#ff6ec7', '#ffe78a', '#ffffff'],
+                        size: 2,
+                    });
+                    this._spawnParticles(hitX, hitY + 6, {
+                        count: 6,
+                        angle: -Math.PI / 2,
+                        spread: Math.PI * 0.4,
+                        minSpeed: 10,
+                        maxSpeed: 30,
+                        friction: 0.9,
+                        gravity: -20,
+                        life: 0.9,
+                        colors: ['rgba(180, 110, 210, 0.65)', 'rgba(140, 80, 180, 0.55)'],
+                        size: 3,
+                    });
+                    this.screenShake = Math.max(this.screenShake, 0.95);
+                    this.hitStopTimer = Math.max(this.hitStopTimer, 0.06);
+                }
+
                 if (slain && this.hasLevelUpAbility) {
                     this._awardXp(enemy.xpReward || 1, enemy.cx, enemy.y + 4);
                 }
             }
         }
+    }
+
+    _directionToAngle(direction) {
+        // 0 = RIGHT, 1 = LEFT, 2 = RIGHT, 3 = UP per constants.js DIR enum
+        // DIR.DOWN=0, LEFT=1, RIGHT=2, UP=3
+        switch (direction) {
+            case 1: return Math.PI;          // LEFT
+            case 2: return 0;                // RIGHT
+            case 3: return -Math.PI / 2;     // UP
+            default: return Math.PI / 2;     // DOWN
+        }
+    }
+
+    _spawnParticles(x, y, opts = {}) {
+        const count = opts.count || 6;
+        const baseAngle = opts.angle;
+        const spread = opts.spread != null ? opts.spread : Math.PI * 2;
+        const minSpeed = opts.minSpeed != null ? opts.minSpeed : 20;
+        const maxSpeed = opts.maxSpeed != null ? opts.maxSpeed : 80;
+        const life = opts.life != null ? opts.life : 0.5;
+        const gravity = opts.gravity != null ? opts.gravity : 0;
+        const friction = opts.friction != null ? opts.friction : 0.88;
+        const colors = opts.colors || [opts.color || '#ffe78a'];
+        const size = opts.size != null ? opts.size : 2;
+        const shrink = opts.shrink !== false;
+
+        for (let i = 0; i < count; i++) {
+            const angle = baseAngle != null
+                ? baseAngle + (Math.random() - 0.5) * spread
+                : Math.random() * Math.PI * 2;
+            const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
+            const jitter = life * (0.7 + Math.random() * 0.55);
+            this.particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                gravity,
+                friction,
+                life: jitter,
+                maxLife: jitter,
+                color: colors[(Math.random() * colors.length) | 0],
+                size: size + (Math.random() < 0.25 ? 1 : 0),
+                shrink,
+            });
+        }
+    }
+
+    _updateParticles(dt) {
+        if (!this.particles || this.particles.length === 0) return;
+        const decay = Math.pow(0.95, dt * 60);
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            const f = Math.pow(p.friction, dt * 60);
+            p.vx *= f;
+            p.vy *= f;
+            p.vy += p.gravity * dt;
+            p.life -= dt;
+            if (p.life <= 0) this.particles.splice(i, 1);
+        }
+        void decay;
+    }
+
+    _drawParticles(ctx) {
+        if (!this.particles || this.particles.length === 0) return;
+        for (const p of this.particles) {
+            const alpha = Math.max(0, Math.min(1, p.life / p.maxLife));
+            const size = p.shrink ? Math.max(1, Math.ceil(p.size * alpha)) : p.size;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(
+                Math.round(p.x - size / 2),
+                Math.round(p.y - size / 2),
+                size,
+                size,
+            );
+        }
+        ctx.globalAlpha = 1;
     }
 
     _awardXp(amount, worldX, worldY) {
@@ -1587,6 +1771,7 @@ export class Game {
         this._drawEntitiesSorted(ctx);
 
         if (this.elara && !this.hasTalkedToElara) this._drawElaraMarker(ctx);
+        this._drawParticles(ctx);
         this._drawXpPopups(ctx);
         this.camera.end(ctx);
 

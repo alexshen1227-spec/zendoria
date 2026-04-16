@@ -151,6 +151,15 @@ export class Player {
         this.xp = 0;
         this.xpToNext = xpToNextLevel(this.level);
 
+        // Dash ability: Shift or F triggers a short high-speed burst with i-frames.
+        this.dashDuration = 0.16;
+        this.dashCooldown = 0.85;
+        this.dashSpeed = 260;
+        this.dashTimer = 0;
+        this.dashCooldownTimer = 0;
+        this.dashDir = { x: 1, y: 0 };
+        this._dashJustStarted = false;
+
         this.skills = {};
         this.skillPoints = 0;
         this.xpMultiplier = 1;
@@ -229,6 +238,7 @@ export class Player {
     update(dt, input, world) {
         this.invulnTimer = Math.max(0, this.invulnTimer - dt);
         this.attackCooldownTimer = Math.max(0, this.attackCooldownTimer - dt);
+        this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
 
         if (this.regenPerSec > 0 && this.health > 0 && this.health < this.maxHealth) {
             this._regenAcc += dt * this.regenPerSec;
@@ -257,35 +267,85 @@ export class Player {
             }
         }
 
-        if ((input.wasPressed('Space') || input.wasPressed('KeyJ') || input.wasLeftClicked()) && this.attackCooldownTimer <= 0) {
+        // Dash input: ShiftLeft / ShiftRight / KeyF. Queues a dash in the current
+        // movement direction, or the facing direction if standing still.
+        const dashRequested =
+            input.wasPressed('ShiftLeft') ||
+            input.wasPressed('ShiftRight') ||
+            input.wasPressed('KeyF');
+        if (dashRequested && this.dashCooldownTimer <= 0 && this.dashTimer <= 0 && this.attackTimer <= 0) {
+            let ddx = move.x;
+            let ddy = move.y;
+            if (ddx === 0 && ddy === 0) {
+                switch (this.direction) {
+                    case DIR.LEFT: ddx = -1; break;
+                    case DIR.RIGHT: ddx = 1; break;
+                    case DIR.UP: ddy = -1; break;
+                    case DIR.DOWN: ddy = 1; break;
+                    default: ddx = 1; break;
+                }
+            }
+            const mag = Math.hypot(ddx, ddy) || 1;
+            this.dashDir = { x: ddx / mag, y: ddy / mag };
+            this.dashTimer = this.dashDuration;
+            this.dashCooldownTimer = this.dashCooldown;
+            this.invulnTimer = Math.max(this.invulnTimer, this.dashDuration + 0.1);
+            this._dashJustStarted = true;
+            if (this.dashDir.x < -0.05) this.facingLeft = true;
+            else if (this.dashDir.x > 0.05) this.facingLeft = false;
+        }
+
+        if ((input.wasPressed('Space') || input.wasPressed('KeyJ') || input.wasLeftClicked()) && this.attackCooldownTimer <= 0 && this.dashTimer <= 0) {
             this._startAttack();
         }
 
-        const movementScale = this.attackTimer > 0 ? 0.72 : 1;
-        if (this.moving) {
-            const dx = move.x * this.speed * movementScale * dt;
-            const dy = move.y * this.speed * movementScale * dt;
+        // Dash overrides normal movement for its duration, leaves a rapid echo trail,
+        // and keeps granting i-frames.
+        if (this.dashTimer > 0) {
+            this.dashTimer = Math.max(0, this.dashTimer - dt);
+            const dx = this.dashDir.x * this.dashSpeed * dt;
+            const dy = this.dashDir.y * this.dashSpeed * dt;
             this._move(dx, dy, world);
 
             this.echoTimer += dt;
-            if (this.echoTimer >= 0.08) {
+            if (this.echoTimer >= 0.025) {
                 this.echoTimer = 0;
                 this.echoTrail.push({
                     x: this.x,
                     y: this.y,
                     frame: this._currentFrame(),
                     facingLeft: this.facingLeft,
-                    alpha: 0.16,
+                    alpha: 0.5,
                 });
-                if (this.echoTrail.length > 6) this.echoTrail.shift();
+                if (this.echoTrail.length > 10) this.echoTrail.shift();
             }
-
-            this.walkTimer += dt * 10;
-            this.walkFrame = 1 + (Math.floor(this.walkTimer) % 4);
         } else {
-            this.echoTimer = 0;
-            this.walkTimer = 0;
-            this.walkFrame = 0;
+            const movementScale = this.attackTimer > 0 ? 0.72 : 1;
+            if (this.moving) {
+                const dx = move.x * this.speed * movementScale * dt;
+                const dy = move.y * this.speed * movementScale * dt;
+                this._move(dx, dy, world);
+
+                this.echoTimer += dt;
+                if (this.echoTimer >= 0.08) {
+                    this.echoTimer = 0;
+                    this.echoTrail.push({
+                        x: this.x,
+                        y: this.y,
+                        frame: this._currentFrame(),
+                        facingLeft: this.facingLeft,
+                        alpha: 0.16,
+                    });
+                    if (this.echoTrail.length > 6) this.echoTrail.shift();
+                }
+
+                this.walkTimer += dt * 10;
+                this.walkFrame = 1 + (Math.floor(this.walkTimer) % 4);
+            } else {
+                this.echoTimer = 0;
+                this.walkTimer = 0;
+                this.walkFrame = 0;
+            }
         }
 
         if (this.attackTimer > 0) {

@@ -11,14 +11,37 @@ body {
     align-items: center;
     overflow: hidden;
     background:
-        radial-gradient(circle at top, rgba(67, 130, 182, 0.2), transparent 36%),
-        radial-gradient(circle at bottom, rgba(59, 160, 121, 0.14), transparent 34%),
+        radial-gradient(ellipse at top, rgba(108, 184, 246, 0.18), transparent 42%),
+        radial-gradient(ellipse at bottom, rgba(95, 200, 155, 0.12), transparent 40%),
+        radial-gradient(circle at 15% 85%, rgba(176, 106, 255, 0.08), transparent 38%),
         #050814;
     font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    position: relative;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.015) 0px,
+        rgba(255, 255, 255, 0.015) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+    mix-blend-mode: overlay;
+    z-index: 1000;
 }
 
 #game-container {
     position: relative;
+    padding: 6px;
+    border-radius: 6px;
+    background:
+        radial-gradient(circle at top left, rgba(120, 247, 215, 0.1), transparent 60%),
+        radial-gradient(circle at bottom right, rgba(176, 106, 255, 0.08), transparent 60%);
 }
 
 #game-canvas {
@@ -26,10 +49,14 @@ body {
     line-height: 0;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    border: 2px solid #1b3446;
+    border: 2px solid #2a4b66;
+    border-radius: 2px;
     box-shadow:
-        0 0 0 2px rgba(120, 247, 215, 0.08),
-        0 24px 80px rgba(0, 0, 0, 0.42);
+        0 0 0 1px rgba(143, 255, 225, 0.18),
+        0 0 18px rgba(120, 247, 215, 0.22),
+        0 0 60px rgba(97, 158, 255, 0.12),
+        0 24px 80px rgba(0, 0, 0, 0.62),
+        inset 0 0 80px rgba(0, 0, 0, 0.35);
 }
 
 .death-overlay {
@@ -297,18 +324,7 @@ body {
 }
 
 .title-debug {
-    position: absolute;
-    top: 6px;
-    right: 10px;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    color: #8fffe1;
-    background: rgba(7, 12, 24, 0.7);
-    padding: 2px 6px;
-    border: 1px solid rgba(143, 255, 225, 0.25);
-    letter-spacing: 0.08em;
-    z-index: 9;
-    pointer-events: none;
+    display: none;
 }
 
 .title-footer {
@@ -321,12 +337,18 @@ body {
 .title-help,
 .pause-help {
     padding: 0.55rem 0.75rem;
-    border: 1px solid rgba(143, 255, 225, 0.22);
-    background: rgba(7, 12, 24, 0.68);
-    color: #8fffe1;
+    border: 1px solid rgba(143, 255, 225, 0.28);
+    background:
+        linear-gradient(180deg, rgba(14, 24, 44, 0.78), rgba(7, 12, 24, 0.85));
+    color: #a8ffec;
     font-size: 0.74rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    box-shadow:
+        inset 0 0 0 1px rgba(143, 255, 225, 0.08),
+        0 6px 24px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(3px);
+    text-shadow: 0 0 6px rgba(143, 255, 225, 0.35);
 }
 
 .title-modal {
