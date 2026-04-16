@@ -340,6 +340,7 @@ export async function loadGameAssets() {
         textSoundSrc: 'assets/audio/voice/text-sound.mp3',
         deathSoundSrc: 'assets/audio/music/Death screen sound.mp3',
         desertMusicSrc: 'assets/audio/music/Desert sound track.mp3',
+        swordSlashSoundSrc: 'assets/audio/music/Sword_Slashing.mp3',
         uiPreload: {
             settingsBanner,
             titlePointer,

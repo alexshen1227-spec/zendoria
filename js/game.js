@@ -139,6 +139,8 @@ export class Game {
         this.deathSound = this._createAudio(this.assets.deathSoundSrc, false);
         if (this.deathSound) this.deathSound.volume = 1;
         if (this.textSound) this.textSound.volume = 0.35;
+        this.swordSlashSound = this._createAudio(this.assets.swordSlashSoundSrc, false);
+        if (this.swordSlashSound) this.swordSlashSound.volume = 0.75;
         this.titleMusicStarted = false;
         this.titleMusicFullVolume = 0.38;
         this.titleMusicDuckedVolume = 0.1;
@@ -186,6 +188,12 @@ export class Game {
         if (this.deathSound) {
             this.deathSound.addEventListener('error', () => {
                 console.warn('Zendoria death sound failed to load.');
+            });
+        }
+
+        if (this.swordSlashSound) {
+            this.swordSlashSound.addEventListener('error', () => {
+                console.warn('Zendoria sword slash sound failed to load.');
             });
         }
 
@@ -1103,6 +1111,12 @@ export class Game {
         this.player.update(dt, this.input, this.world);
         if (this.tombstone) this.tombstone.update(dt);
 
+        // Play the sword slash SFX the moment the player starts a swing.
+        if (this.player._attackJustStarted) {
+            this.player._attackJustStarted = false;
+            this._playSwordSlash();
+        }
+
         // Emit dash particles right after a dash starts (player sets _dashJustStarted).
         if (this.player._dashJustStarted) {
             this.player._dashJustStarted = false;
@@ -1441,6 +1455,17 @@ export class Game {
         try {
             this.textSound.pause();
             this.textSound.currentTime = 0;
+        } catch (_) { /* ignore */ }
+    }
+
+    _playSwordSlash() {
+        if (!this.swordSlashSound || !this.settings.soundEnabled) return;
+        try {
+            // Clone so rapid swings overlap instead of stomping each other.
+            const clip = this.swordSlashSound.cloneNode(true);
+            clip.volume = this.swordSlashSound.volume;
+            const p = clip.play();
+            if (p && p.catch) p.catch(() => {});
         } catch (_) { /* ignore */ }
     }
 

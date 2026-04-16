@@ -438,6 +438,7 @@ export class Player {
         this.attackTimer = this.attackDuration;
         this.attackCooldownTimer = this.attackCooldown;
         this.attackVictims.clear();
+        this._attackJustStarted = true;
 
         this.attackDirection = this.direction;
         if (this.attackDirection === DIR.LEFT) this.facingLeft = true;
