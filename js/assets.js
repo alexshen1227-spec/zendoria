@@ -1,6 +1,6 @@
 import { PixelFont } from './pixelText.js?v=20260414-no-bridge-pass2';
 import { loadImage, SpriteSheet } from './sprite.js?v=20260414-no-bridge-pass2';
-import { ENEMY_CONFIGS } from './enemy.js?v=20260414-desert-enemies';
+import { ENEMY_CONFIGS } from './enemy.js?v=20260416-frontier-rusher-archer-goliath';
 
 const ENVIRONMENT_PROP_FILES = {
     pineTall: 'assets/sprites/environment/foliage_prop_00.png',

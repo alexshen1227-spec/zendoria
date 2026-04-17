@@ -190,23 +190,47 @@ export class World {
         };
 
         this.fixedEnemySpawns = [
+            // Original desert-base enemies (kept as ambient threats)
             { kind: 'blightworm', x: 69 * TILE + 2, y: 42 * TILE + 2 },
             { kind: 'duneWarden', x: 59 * TILE + 2, y: 34 * TILE + 2 },
             { kind: 'duneWarden', x: 101 * TILE + 2, y: 32 * TILE + 2 },
             { kind: 'sunscarab', x: 26 * TILE + 2, y: 50 * TILE + 2 },
-            { kind: 'sunscarab', x: 32 * TILE + 2, y: 38 * TILE + 2 },
             { kind: 'sunscarab', x: 70 * TILE + 2, y: 21 * TILE + 2 },
             { kind: 'duneWarden', x: 88 * TILE + 2, y: 20 * TILE + 2 },
             { kind: 'blightworm', x: 83 * TILE + 2, y: 66 * TILE + 2 },
-            { kind: 'blightworm', x: 61 * TILE + 2, y: 73 * TILE + 2 },
+
+            // Rushers — canyon biome (rocky/cave)
+            { kind: 'rusher', x: 78 * TILE + 2, y: 18 * TILE + 2 },
+            { kind: 'rusher', x: 84 * TILE + 2, y: 22 * TILE + 2 },
+            { kind: 'rusher', x: 92 * TILE + 2, y: 16 * TILE + 2 },
+            { kind: 'rusher', x: 100 * TILE + 2, y: 24 * TILE + 2 },
+
+            // Tactical Archers — salt flats (open sightlines for ranged)
+            { kind: 'tacticalArcher', x: 22 * TILE + 2, y: 48 * TILE + 2 },
+            { kind: 'tacticalArcher', x: 28 * TILE + 2, y: 56 * TILE + 2 },
+            { kind: 'tacticalArcher', x: 18 * TILE + 2, y: 60 * TILE + 2 },
+
+            // Goliath — tropics ruins (heavy boss-tier near submerged ruins)
+            { kind: 'goliath', x: 70 * TILE + 2, y: 64 * TILE + 2 },
+            { kind: 'goliath', x: 64 * TILE + 2, y: 70 * TILE + 2 },
         ];
 
         this.enemySpawnNodes = [
-            { kind: 'sunscarab', x: 20 * TILE + 8, y: 45 * TILE + 8, interval: 16, maxAlive: 3, leashRadius: 72, activationRadius: 260 },
+            // Original
             { kind: 'sunscarab', x: 30 * TILE + 8, y: 58 * TILE + 8, interval: 14, maxAlive: 3, leashRadius: 72, activationRadius: 260 },
-            { kind: 'duneWarden', x: 76 * TILE + 8, y: 19 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 80, activationRadius: 260 },
             { kind: 'duneWarden', x: 94 * TILE + 8, y: 22 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 80, activationRadius: 260 },
             { kind: 'blightworm', x: 82 * TILE + 8, y: 63 * TILE + 8, interval: 13, maxAlive: 3, leashRadius: 78, activationRadius: 260 },
+
+            // Rusher swarms in the canyons — fast, low HP, frequent
+            { kind: 'rusher', x: 86 * TILE + 8, y: 20 * TILE + 8, interval: 8, maxAlive: 4, leashRadius: 90, activationRadius: 260 },
+            { kind: 'rusher', x: 96 * TILE + 8, y: 18 * TILE + 8, interval: 9, maxAlive: 3, leashRadius: 90, activationRadius: 260 },
+
+            // Archer pickets in the salt flats
+            { kind: 'tacticalArcher', x: 25 * TILE + 8, y: 52 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 100, activationRadius: 320 },
+            { kind: 'tacticalArcher', x: 32 * TILE + 8, y: 60 * TILE + 8, interval: 20, maxAlive: 2, leashRadius: 100, activationRadius: 320 },
+
+            // Goliath in the tropics ruins (rare, slow respawn)
+            { kind: 'goliath', x: 72 * TILE + 8, y: 66 * TILE + 8, interval: 45, maxAlive: 1, leashRadius: 120, activationRadius: 280 },
         ];
 
         this.mapMarkers = [

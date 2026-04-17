@@ -3,7 +3,7 @@ import { Input } from './input.js?v=20260414-no-bridge-pass2';
 import { Player } from './player.js?v=20260415-skilltree-ui';
 import { Camera } from './camera.js?v=20260414-no-bridge-pass2';
 import { World } from './world.js?v=20260416-realm-split';
-import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260414-desert-enemies';
+import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260416-frontier-rusher-archer-goliath';
 import { Elara } from './npc.js?v=20260414-no-bridge-pass2';
 import { Tombstone } from './tombstone.js?v=20260414-tombstone-anim';
 import { Portal } from './portal.js?v=20260414-desert-enemies';
@@ -361,6 +361,8 @@ export class Game {
 
         this.xpPopups = [];
         this.particles = [];
+        this.projectiles = [];
+        this.swingFx = [];
         this.hitStopTimer = 0;
         this.levelUpAnim = null;
         this.levelUpFlash = 0;
@@ -1163,10 +1165,36 @@ export class Game {
 
         for (const enemy of this.enemies) {
             enemy.update(dt, this.player, this.world);
+            // Harvest archer arrows
+            if (typeof enemy.consumeProjectile === 'function') {
+                const proj = enemy.consumeProjectile();
+                if (proj) this._spawnEnemyProjectile(proj);
+            }
+            // Harvest goliath swing FX
+            if (typeof enemy.consumeSwingFx === 'function') {
+                const fx = enemy.consumeSwingFx();
+                if (fx) {
+                    this.swingFx.push(fx);
+                    this.screenShake = Math.max(this.screenShake, 0.5);
+                    this._spawnParticles(fx.x, fx.y, {
+                        count: 14,
+                        spread: Math.PI * 2,
+                        minSpeed: 60,
+                        maxSpeed: 150,
+                        friction: 0.85,
+                        gravity: 40,
+                        life: 0.4,
+                        colors: ['#caa78a', '#8a6a4a', '#ffe4a8', '#704528'],
+                        size: 2,
+                    });
+                }
+            }
         }
 
         this.enemies = this.enemies.filter((enemy) => enemy.state !== 'dead');
         this._updateEnemySpawners(dt);
+        this._updateProjectiles(dt);
+        this._updateSwingFx(dt);
         this._resolveCombat();
         this._updateObjectiveState(dt);
         this._updateNpcInteraction();
@@ -1586,6 +1614,141 @@ export class Game {
         }
     }
 
+    _spawnEnemyProjectile(proj) {
+        // proj = { originX, originY, dirX, dirY, speed, damage }
+        const angle = Math.atan2(proj.dirY, proj.dirX);
+        this.projectiles.push({
+            x: proj.originX,
+            y: proj.originY,
+            vx: proj.dirX * proj.speed,
+            vy: proj.dirY * proj.speed,
+            angle,
+            damage: proj.damage,
+            life: 1.6,
+            maxLife: 1.6,
+        });
+    }
+
+    _updateProjectiles(dt) {
+        if (!this.projectiles || this.projectiles.length === 0) return;
+        const playerHb = this.player.getHitbox();
+        // Arrow has a generous hitbox so glancing shots still land
+        const arrowR = 5;
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const p = this.projectiles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt;
+            // Trail
+            if (Math.random() < 0.5) {
+                this.particles.push({
+                    x: p.x, y: p.y,
+                    vx: 0, vy: 0,
+                    gravity: 0, friction: 0.9,
+                    life: 0.18, maxLife: 0.18,
+                    color: 'rgba(220, 200, 140, 0.6)',
+                    size: 1, shrink: true,
+                });
+            }
+            // Player hit (AABB with arrow radius pad)
+            if (
+                p.x + arrowR >= playerHb.x && p.x - arrowR <= playerHb.x + playerHb.w &&
+                p.y + arrowR >= playerHb.y && p.y - arrowR <= playerHb.y + playerHb.h
+            ) {
+                this.player.takeDamage(p.damage, {
+                    x: Math.cos(p.angle) * 18,
+                    y: Math.sin(p.angle) * 14,
+                });
+                this._spawnParticles(p.x, p.y, {
+                    count: 6,
+                    spread: Math.PI * 2,
+                    minSpeed: 30,
+                    maxSpeed: 90,
+                    friction: 0.86,
+                    gravity: 50,
+                    life: 0.32,
+                    colors: ['#ffd773', '#a16030', '#ffffff'],
+                    size: 1,
+                });
+                this.screenShake = Math.max(this.screenShake, 0.4);
+                this.projectiles.splice(i, 1);
+                continue;
+            }
+            // World collision
+            if (this.world.collides(p.x, p.y, 1, 1)) {
+                this._spawnParticles(p.x, p.y, {
+                    count: 4,
+                    spread: Math.PI * 2,
+                    minSpeed: 10,
+                    maxSpeed: 60,
+                    friction: 0.84,
+                    life: 0.25,
+                    colors: ['#a18060', '#ffd773'],
+                    size: 1,
+                });
+                this.projectiles.splice(i, 1);
+                continue;
+            }
+            if (p.life <= 0) {
+                this.projectiles.splice(i, 1);
+            }
+        }
+    }
+
+    _updateSwingFx(dt) {
+        if (!this.swingFx || this.swingFx.length === 0) return;
+        for (let i = this.swingFx.length - 1; i >= 0; i--) {
+            const fx = this.swingFx[i];
+            fx.timer -= dt;
+            if (fx.timer <= 0) this.swingFx.splice(i, 1);
+        }
+    }
+
+    _drawProjectiles(ctx) {
+        if (!this.projectiles || this.projectiles.length === 0) return;
+        ctx.save();
+        for (const p of this.projectiles) {
+            ctx.translate(Math.round(p.x), Math.round(p.y));
+            ctx.rotate(p.angle);
+            // shaft
+            ctx.fillStyle = '#a07040';
+            ctx.fillRect(-5, -1, 10, 2);
+            // head
+            ctx.fillStyle = '#e8c870';
+            ctx.fillRect(4, -1, 3, 2);
+            // fletch
+            ctx.fillStyle = '#5a3a20';
+            ctx.fillRect(-6, -2, 2, 1);
+            ctx.fillRect(-6, 1, 2, 1);
+            ctx.rotate(-p.angle);
+            ctx.translate(-Math.round(p.x), -Math.round(p.y));
+        }
+        ctx.restore();
+    }
+
+    _drawSwingFx(ctx) {
+        if (!this.swingFx || this.swingFx.length === 0) return;
+        for (const fx of this.swingFx) {
+            const t = 1 - (fx.timer / fx.total);
+            const radius = 14 + t * 44;
+            const alpha = (1 - t) * 0.55;
+            ctx.save();
+            ctx.translate(Math.round(fx.x), Math.round(fx.y));
+            // crescent ring
+            ctx.strokeStyle = `rgba(255, 220, 130, ${alpha})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, -Math.PI * 0.7, -Math.PI * 0.3);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255, 240, 200, ${alpha * 0.6})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius + 2, -Math.PI * 0.75, -Math.PI * 0.25);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
     _updateParticles(dt) {
         if (!this.particles || this.particles.length === 0) return;
         const decay = Math.pow(0.95, dt * 60);
@@ -1796,6 +1959,8 @@ export class Game {
         this._drawEntitiesSorted(ctx);
 
         if (this.elara && !this.hasTalkedToElara) this._drawElaraMarker(ctx);
+        this._drawProjectiles(ctx);
+        this._drawSwingFx(ctx);
         this._drawParticles(ctx);
         this._drawXpPopups(ctx);
         this.camera.end(ctx);
