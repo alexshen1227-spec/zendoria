@@ -2819,7 +2819,7 @@ export class Game {
         const totalColsW = columnWidth * SKILL_COLUMNS.length + columnGap * (SKILL_COLUMNS.length - 1);
         const colsStartX = Math.round((NATIVE_WIDTH - totalColsW) / 2);
         const colsY = 40;
-        const colsH = 134;
+        const colsH = 126;
 
         for (let c = 0; c < SKILL_COLUMNS.length; c++) {
             const columnKey = SKILL_COLUMNS[c];
@@ -2830,9 +2830,9 @@ export class Game {
         // description panel
         const def = this._currentSkillDef();
         const panelX = frameX + 4;
-        const panelY = colsY + colsH + 6;
+        const panelY = colsY + colsH + 4;
         const panelW = frameW - 8;
-        const panelH = 32;
+        const panelH = 38;
         ctx.fillStyle = 'rgba(6, 10, 20, 0.88)';
         ctx.fillRect(panelX, panelY, panelW, panelH);
         ctx.strokeStyle = `rgba(168, 227, 255, ${0.4 + pulse * 0.25})`;
@@ -2844,14 +2844,17 @@ export class Game {
             const headline = atMax
                 ? `${def.name}  -  MAX`
                 : `${def.name}  -  RANK ${rank}/${def.maxRank}`;
-            font.draw(ctx, headline, panelX + 6, panelY + 4, {
+            font.draw(ctx, headline, panelX + 6, panelY + 3, {
                 color: atMax ? '#ffe78a' : '#a6ffcb',
             });
-            font.draw(ctx, def.desc, panelX + 6, panelY + 14, { color: '#d6e9ff' });
+            const descLines = this._wrapPixelText(def.desc, panelW - 12, 1).slice(0, 2);
+            for (let i = 0; i < descLines.length; i++) {
+                font.draw(ctx, descLines[i], panelX + 6, panelY + 12 + i * 8, { color: '#d6e9ff' });
+            }
             const nextText = atMax
                 ? 'NO MORE RANKS - SKILL MASTERED'
                 : `NEXT: ${def.effectText(rank + 1)}`;
-            font.draw(ctx, nextText, panelX + 6, panelY + 22, {
+            font.draw(ctx, nextText, panelX + 6, panelY + 29, {
                 color: atMax ? '#a8e3ff' : '#ffd27b',
             });
         }
@@ -3496,13 +3499,20 @@ export class Game {
         }
 
         if (this.toastTimer > 0 && this.toast) {
-            const toastWidth = Math.max(90, font.measure(this.toast, 1) + 12);
+            const maxToastW = NATIVE_WIDTH - 20;
+            const lines = this._wrapPixelText(this.toast, maxToastW - 12, 1);
+            const lineWidths = lines.map((l) => font.measure(l, 1));
+            const toastWidth = Math.max(90, Math.max(...lineWidths) + 12);
+            const toastH = 4 + lines.length * 8;
             const toastX = Math.round((NATIVE_WIDTH - toastWidth) / 2);
             const beaconActive = this.hasLevelUpAbility && this.player.skillPoints > 0;
             const toastY = beaconActive ? 72 : (this.hasLevelUpAbility ? 56 : 42);
             ctx.fillStyle = 'rgba(7, 11, 19, 0.82)';
-            ctx.fillRect(toastX, toastY, toastWidth, 12);
-            font.draw(ctx, this.toast, toastX + 6, toastY + 2, { color: '#8df7d2' });
+            ctx.fillRect(toastX, toastY, toastWidth, toastH);
+            lines.forEach((line, i) => {
+                const lw = lineWidths[i];
+                font.draw(ctx, line, toastX + Math.round((toastWidth - lw) / 2), toastY + 2 + i * 8, { color: '#8df7d2' });
+            });
         }
 
         for (const enemy of this.enemies) {
