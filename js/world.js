@@ -100,6 +100,8 @@ export class World {
         this.elaraSpawn = { x: 28 * TILE, y: 32 * TILE };
         this.tombstoneSpawn = { x: 22 * TILE, y: 36 * TILE };
         this.treasureChestSpawn = null;
+        this.pillarSpawns = [];
+        this.sandwormSpawn = null;
 
         this.bridgeFocus = { x: 65 * TILE + 8, y: 32 * TILE + 8 };
         this.scoutFocus = { x: 24 * TILE + 8, y: 34 * TILE + 8 };
@@ -177,6 +179,35 @@ export class World {
         this.portalFocus = {
             x: this.treasureChestSpawn.x,
             y: this.treasureChestSpawn.y - 10,
+        };
+
+        this.pillarSpawns = [
+            {
+                id: 'pillar-canyon',
+                biome: 'canyon',
+                x: 90 * TILE + 8,
+                y: 21 * TILE + 14,
+                accent: '#ff9a70',
+            },
+            {
+                id: 'pillar-salt',
+                biome: 'salt',
+                x: 25 * TILE + 8,
+                y: 53 * TILE + 14,
+                accent: '#dff6ff',
+            },
+            {
+                id: 'pillar-tropics',
+                biome: 'tropics',
+                x: 67 * TILE + 8,
+                y: 67 * TILE + 14,
+                accent: '#6fffd5',
+            },
+        ];
+
+        this.sandwormSpawn = {
+            x: 88 * TILE + 8,
+            y: 46 * TILE + 8,
         };
         this.eastIsleThreshold = Number.POSITIVE_INFINITY;
 

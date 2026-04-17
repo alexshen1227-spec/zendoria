@@ -266,6 +266,8 @@ export async function loadGameAssets() {
         deathQuitRaw,
         deathReloadRaw,
         worldMapImage,
+        pillarSheetImage,
+        sandwormSheetImage,
         ...runtimeImages
     ] = await Promise.all([
         loadImage('assets/sprites/player/driftwalker_walk_strip.png'),
@@ -291,6 +293,8 @@ export async function loadGameAssets() {
         loadImage('assets/reference/provided_pixel_art/You_Died%20(Quit).png'),
         loadImage('assets/reference/provided_pixel_art/You_Died%20(Reload).png'),
         loadImage('assets/reference/provided_pixel_art/Map.jpg'),
+        loadImage('assets/sprites/pillars/pillar_sheet.png'),
+        loadImage('assets/sprites/boss/sandworm_sheet.png'),
         ...enemyEntries.map(([, config]) => loadImage(config.src)),
         ...environmentEntries.map(([, src]) => loadImage(src)),
     ]);
@@ -334,6 +338,8 @@ export async function loadGameAssets() {
         deathQuitImage: deathQuitRaw,
         deathReloadImage: deathReloadRaw,
         worldMapImage,
+        pillarSheet: new SpriteSheet(pillarSheetImage, 47, 48),
+        sandwormSheet: new SpriteSheet(sandwormSheetImage, 182, 96),
         titleVoiceSrc: 'assets/audio/voice/title-intro-cornelius.mp3',
         gameMusicSrc: 'assets/audio/music/driftmere-battle-loop.mp3',
         titleMusicSrc: 'assets/audio/music/View_from_the_World_Map.mp3',

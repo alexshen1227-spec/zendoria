@@ -262,6 +262,50 @@ export const ENEMY_CONFIGS = {
             death: [frame(0, 5), frame(1, 5)],
         },
     },
+    sandworm: {
+        kind: 'sandworm',
+        src: 'assets/sprites/boss/sandworm_sheet.png',
+        frameW: 182,
+        frameH: 96,
+        hudLabel: 'SAND WORM',
+        toastLabel: 'SAND WORM',
+        maxHealth: 40,
+        xpReward: 60,
+        wanderSpeed: 16,
+        chaseSpeed: 34,
+        aggroRadius: 9999,
+        loseRadius: 9999,
+        contactDamage: 2,
+        contactPush: { x: 42, y: 30 },
+        attackCooldown: 1.15,
+        hurtDuration: 0.22,
+        deathDuration: 1.4,
+        knockbackSpeed: 24,
+        knockbackDuration: 0.08,
+        leashRadius: 9999,
+        // Scaled render. Actual frame is 182x96; boss draws at 0.6 scale.
+        isBoss: true,
+        renderScale: 0.6,
+        // Hitbox is expressed in scaled-render space for consistency with other enemies.
+        hitbox: { x: 22, y: 14, w: 65, h: 38 },
+        shadow: { x: 16, y: 50, w: 78, h: 6 },
+        flashJitter: { x: 1.2, y: 0.8 },
+        spawnSearch: { maxRadius: 140, step: 10 },
+        idleDuration: [1.0, 1.6],
+        wanderDuration: [1.0, 1.8],
+        walkAnimSpeed: 3,
+        chaseAnimSpeed: 5,
+        biteWindup: 0.35,
+        biteLinger: 0.25,
+        animations: {
+            // col 0 = idle, col 1 = bite, col 2 = hurt, col 3 = dying
+            idle: frame(0, 0),
+            walk: [frame(0, 0), frame(1, 0)],
+            attack: [frame(1, 0)],
+            hurt: [frame(2, 0)],
+            death: [frame(3, 0), frame(3, 0)],
+        },
+    },
 };
 
 export function normalizeEnemyKind(kind) {
@@ -272,6 +316,7 @@ export function createEnemy(kind, x, y, enemySheets) {
     const resolvedKind = normalizeEnemyKind(kind);
     const config = ENEMY_CONFIGS[resolvedKind];
     const sheet = enemySheets?.[resolvedKind] || null;
+    if (config.isBoss) return new SandwormBoss(x, y, config, sheet);
     if (config.isRanged) return new RangedEnemy(x, y, config, sheet);
     if (config.isTank) return new TankEnemy(x, y, config, sheet);
     return new Enemy(x, y, config, sheet);
@@ -879,5 +924,169 @@ export class TankEnemy extends Enemy {
             return block[i] ?? block[0];
         }
         return super._currentFrame();
+    }
+}
+
+/**
+ * SandwormBoss: the Sunken Tropics defeat lord. Scales the massive 182x96
+ * source frames to a still-imposing render size, bites on contact, and
+ * telegraphs windups so the player can time their strikes.
+ */
+export class SandwormBoss extends Enemy {
+    constructor(x, y, config, sheet) {
+        super(x, y, config, sheet);
+        // Logical size = scaled render. The sheet still uses frameW/frameH for
+        // source-image sampling; draw() handles the downscale to fit the world.
+        this.renderScale = config.renderScale || 0.6;
+        this.w = Math.round(config.frameW * this.renderScale);
+        this.h = Math.round(config.frameH * this.renderScale);
+        this.biteWindupTimer = 0;
+        this.biteLingerTimer = 0;
+        this.biteDidDamage = false;
+        this.emergeTimer = 1.1; // brief emergence into the realm
+    }
+
+    update(dt, player, world) {
+        if (this.state === 'dead') return;
+        if (this.emergeTimer > 0) {
+            this.emergeTimer = Math.max(0, this.emergeTimer - dt);
+            this.flashTimer = Math.max(this.flashTimer, 0.12);
+            return;
+        }
+
+        this.biteCooldown = Math.max(0, this.biteCooldown - dt);
+
+        if (this.biteWindupTimer > 0) {
+            this.biteWindupTimer = Math.max(0, this.biteWindupTimer - dt);
+            if (this.biteWindupTimer === 0) {
+                // bite strike
+                this.biteLingerTimer = this.config.biteLinger;
+                this.biteDidDamage = false;
+            }
+        }
+        if (this.biteLingerTimer > 0) this.biteLingerTimer = Math.max(0, this.biteLingerTimer - dt);
+
+        super.update(dt, player, world);
+        if (this.state === 'dead' || this.state === 'dying') return;
+
+        // Queue a bite windup when close enough.
+        const dx = player.cx - this.cx;
+        const dy = player.cy - this.cy;
+        const distSq = dx * dx + dy * dy;
+        if (this.biteCooldown <= 0 && this.biteWindupTimer <= 0 && this.biteLingerTimer <= 0 && distSq <= 56 * 56) {
+            this.biteWindupTimer = this.config.biteWindup;
+            this.biteCooldown = this.config.attackCooldown;
+        }
+
+        // Apply contact damage during the bite linger window.
+        if (this.biteLingerTimer > 0 && !this.biteDidDamage) {
+            const hitbox = player.getHitbox();
+            const pad = 6;
+            const overlap = (
+                this.getHitbox().x < hitbox.x + hitbox.w + pad &&
+                this.getHitbox().x + this.getHitbox().w > hitbox.x - pad &&
+                this.getHitbox().y < hitbox.y + hitbox.h + pad &&
+                this.getHitbox().y + this.getHitbox().h > hitbox.y - pad
+            );
+            if (overlap) {
+                const len = Math.max(0.001, Math.hypot(dx, dy));
+                if (player.takeDamage(this.config.contactDamage, {
+                    x: (dx / len) * this.config.contactPush.x,
+                    y: (dy / len) * this.config.contactPush.y,
+                })) {
+                    this.biteDidDamage = true;
+                }
+            }
+        }
+    }
+
+    _currentFrame() {
+        if (this.state === 'dying') return this.config.animations.death[0];
+        if (this.state === 'hurt') return this.config.animations.hurt[0];
+        if (this.biteWindupTimer > 0 || this.biteLingerTimer > 0) {
+            return this.config.animations.attack[0];
+        }
+        return this.config.animations.idle;
+    }
+
+    draw(ctx) {
+        if (this.state === 'dead') return;
+        const shadow = this.config.shadow;
+        const alpha = this.state === 'dying'
+            ? Math.max(0.25, this.deathTimer / this.config.deathDuration)
+            : (this.emergeTimer > 0 ? 1 - this.emergeTimer / 1.1 : 1);
+        const frameCoords = this._currentFrame();
+        const flash = this.config.flashJitter;
+        const jitterX = this.flashTimer > 0 ? (Math.random() * 2 - 1) * flash.x : 0;
+        const jitterY = this.flashTimer > 0 ? (Math.random() * 2 - 1) * flash.y : 0;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        ctx.beginPath();
+        ctx.ellipse(this.x + this.w / 2, this.y + shadow.y + shadow.h / 2, shadow.w / 2, shadow.h / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (!this.sheet) return;
+
+        const sx = frameCoords.col * this.config.frameW;
+        const sy = frameCoords.row * this.config.frameH;
+
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha *= alpha;
+
+        // Sand-burst under the boss during emerge
+        if (this.emergeTimer > 0) {
+            const t = 1 - this.emergeTimer / 1.1;
+            ctx.fillStyle = `rgba(228, 192, 120, ${0.5 * (1 - t)})`;
+            ctx.beginPath();
+            ctx.ellipse(this.x + this.w / 2, this.y + this.h - 6, this.w * 0.6, this.h * 0.3 * (1 - t), 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Main body (flipped horizontally for facing).
+        ctx.save();
+        const cx = Math.round(this.x + this.w / 2 + jitterX);
+        const cy = Math.round(this.y + this.h / 2 + jitterY);
+        ctx.translate(cx, cy);
+        ctx.scale(this.facingLeft ? -1 : 1, 1);
+        ctx.drawImage(
+            this.sheet.image,
+            sx, sy,
+            this.config.frameW, this.config.frameH,
+            -this.w / 2, -this.h / 2,
+            this.w, this.h,
+        );
+        ctx.restore();
+
+        if (this.flashTimer > 0) {
+            const t = Math.max(0, Math.min(1, this.flashTimer / 0.18));
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.55 * t;
+            ctx.translate(cx, cy);
+            ctx.scale(this.facingLeft ? -1 : 1, 1);
+            ctx.drawImage(
+                this.sheet.image,
+                sx, sy,
+                this.config.frameW, this.config.frameH,
+                -this.w / 2, -this.h / 2,
+                this.w, this.h,
+            );
+            ctx.restore();
+        }
+
+        // Bite telegraph ring
+        if (this.biteWindupTimer > 0) {
+            const progress = 1 - this.biteWindupTimer / this.config.biteWindup;
+            const radius = 50 + progress * 12;
+            ctx.strokeStyle = `rgba(255, 120, 120, ${0.3 + progress * 0.5})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(this.x + this.w / 2, this.y + this.h / 2, radius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        ctx.restore();
     }
 }

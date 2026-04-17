@@ -240,7 +240,7 @@ export class Player {
         this.attackCooldownTimer = Math.max(0, this.attackCooldownTimer - dt);
         this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
 
-        if (this.regenPerSec > 0 && this.health > 0 && this.health < this.maxHealth) {
+        if (!this.healingBlocked && this.regenPerSec > 0 && this.health > 0 && this.health < this.maxHealth) {
             this._regenAcc += dt * this.regenPerSec;
             while (this._regenAcc >= 1) {
                 this._regenAcc -= 1;

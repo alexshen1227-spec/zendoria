@@ -1,5 +1,12 @@
-import { loadGameAssets } from './assets.js?v=20260416-realm-split';
-import { Game } from './game.js?v=20260416-realm-split';
+import { loadGameAssets } from './assets.js?v=20260416-pillars-boss';
+import { Game } from './game.js?v=20260416-pillars-boss';
+
+try {
+    localStorage.removeItem('zendoria-save-v1');
+    localStorage.removeItem('zendoria-checkpoints-v1');
+} catch (err) {
+    console.warn('Zendoria: unable to clear save state on refresh', err);
+}
 
 window.addEventListener('DOMContentLoaded', async () => {
     const canvas = document.getElementById('game-canvas');

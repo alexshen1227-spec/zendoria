@@ -8,6 +8,7 @@ import { Elara } from './npc.js?v=20260414-no-bridge-pass2';
 import { Tombstone } from './tombstone.js?v=20260414-tombstone-anim';
 import { Portal } from './portal.js?v=20260414-desert-enemies';
 import { TreasureChest } from './treasureChest.js?v=20260415-level-up-chest';
+import { Pillar } from './pillar.js?v=20260416-pillars-boss';
 import {
     MAX_PLAYER_LEVEL,
     SKILLS,
@@ -340,6 +341,13 @@ export class Game {
         this.elara = null;
         this.tombstone = null;
         this.treasureChest = null;
+        this.pillars = [];
+        this.sandwormBoss = null;
+        this.bossState = 'none';
+        this.bossTriggerTimer = 0;
+        this.bossHpFlash = 0;
+        this.groundShakeTimer = 0;
+        this.bossVictoryTimer = 0;
         this.gameTime = 0;
         this.screenShake = 0;
         this.objectiveTimer = 8;
@@ -391,6 +399,12 @@ export class Game {
         if (this.elara) colliders.push(this.elara.getCollider());
         if (this.tombstone) colliders.push(this.tombstone.getCollider());
         if (this.treasureChest) colliders.push(this.treasureChest.getCollider());
+        if (this.pillars) {
+            for (const pillar of this.pillars) {
+                const c = pillar.getCollider();
+                if (c) colliders.push(c);
+            }
+        }
         if (this.portals) {
             for (const portal of this.portals) {
                 if (portal.getCollider) colliders.push(portal.getCollider());
@@ -467,6 +481,93 @@ export class Game {
         return enemy;
     }
 
+    _allPillarsDestroyed() {
+        return this.pillars.length > 0 && this.pillars.every((p) => p.destroyed);
+    }
+
+    _pillarsRemaining() {
+        return this.pillars.filter((p) => !p.destroyed).length;
+    }
+
+    _updateBossState(dt) {
+        // Ground shake during emerge.
+        if (this.groundShakeTimer > 0) {
+            this.groundShakeTimer = Math.max(0, this.groundShakeTimer - dt);
+            const intensity = Math.min(1.8, this.groundShakeTimer * 0.9);
+            this.screenShake = Math.max(this.screenShake, intensity);
+        }
+
+        if (this.bossState === 'none'
+            && this.currentRealmId === 'frontier'
+            && this.hasLevelUpAbility
+            && this._allPillarsDestroyed()
+        ) {
+            this.bossState = 'preparing';
+            this.bossTriggerTimer = 3.2;
+            this.groundShakeTimer = 3.2;
+            this.toast = 'THE GROUND SHAKES BENEATH YOUR FEET';
+            this.toastTimer = 3.4;
+            this._playBeep(120, 0.6, 'sine', 0.25);
+            this._playBeep(80, 0.9, 'sine', 0.2);
+        }
+
+        if (this.bossState === 'preparing') {
+            this.bossTriggerTimer = Math.max(0, this.bossTriggerTimer - dt);
+            if (this.bossTriggerTimer === 0) {
+                this._spawnSandwormBoss();
+                this.bossState = 'fighting';
+                this.toast = 'DEFEAT THE SAND WORM';
+                this.toastTimer = 2.4;
+                this.screenShake = Math.max(this.screenShake, 1.4);
+                this._playBeep(180, 0.7, 'sawtooth', 0.24);
+                this._playBeep(90, 1.0, 'sine', 0.2);
+            }
+        }
+
+        if (this.bossState === 'fighting' && this.sandwormBoss) {
+            if (this.bossHpFlash > 0) this.bossHpFlash = Math.max(0, this.bossHpFlash - dt);
+            if (this.sandwormBoss.state === 'dead' || !this.sandwormBoss.isAlive()) {
+                this.bossState = 'defeated';
+                this.bossVictoryTimer = 4.0;
+                this.toast = 'THE SAND WORM FALLS';
+                this.toastTimer = 3.4;
+                this.screenShake = Math.max(this.screenShake, 1.0);
+                this._playBeep(960, 0.2, 'triangle', 0.22);
+                this._playBeep(1280, 0.3, 'sine', 0.16);
+            }
+        }
+
+        if (this.bossState === 'defeated') {
+            this.bossVictoryTimer = Math.max(0, this.bossVictoryTimer - dt);
+        }
+    }
+
+    _spawnSandwormBoss() {
+        // Prefer the designated spawn point if the world defines one, otherwise
+        // emerge near the player so the fight starts immediately.
+        const targetX = (this.world.sandwormSpawn?.x ?? this.player.cx);
+        const targetY = (this.world.sandwormSpawn?.y ?? this.player.cy) + 4;
+        const spawn = this._spawnEnemy({
+            kind: 'sandworm',
+            x: targetX - 60,
+            y: targetY - 30,
+        });
+        this.enemies.push(spawn);
+        this.sandwormBoss = spawn;
+        // Big emerge burst of sand particles.
+        this._spawnParticles(spawn.cx, spawn.cy + 10, {
+            count: 36,
+            spread: Math.PI * 2,
+            minSpeed: 40,
+            maxSpeed: 180,
+            friction: 0.88,
+            gravity: 80,
+            life: 0.9,
+            colors: ['#e4c078', '#c89460', '#ffe0a2', '#a77042'],
+            size: 2,
+        });
+    }
+
     _serializeEnemies(enemies = this.enemies) {
         return enemies.map((enemy) => ({
             kind: enemy.kind,
@@ -488,6 +589,7 @@ export class Game {
         this.realmStates[this.currentRealmId] = {
             enemies: this._serializeEnemies(),
             enemySpawnNodes: this._serializeSpawnNodes(),
+            pillars: (this.pillars || []).map((p) => p.stage),
         };
     }
 
@@ -536,12 +638,25 @@ export class Game {
         const savedRealmState = forceFresh ? null : this.realmStates[this.currentRealmId];
         const savedEnemies = savedRealmState?.enemies;
         const savedSpawnNodes = savedRealmState?.enemySpawnNodes;
+        const savedPillars = savedRealmState?.pillars;
+
+        this.pillars = (this.world.pillarSpawns || []).map((def, index) => {
+            const savedStage = Array.isArray(savedPillars) ? (savedPillars[index] || 0) : 0;
+            return new Pillar(def, this.assets.pillarSheet, savedStage);
+        });
 
         this.enemies = this._createEnemies(savedEnemies ?? null);
         if (Array.isArray(savedSpawnNodes) && savedSpawnNodes.length === this.world.enemySpawnNodes.length) {
             this.enemySpawnNodes = savedSpawnNodes.map((node) => ({ ...node }));
         } else {
             this.enemySpawnNodes = this._createSpawnNodesState();
+        }
+
+        // Re-attach the live boss reference if the realm snapshot had one.
+        this.sandwormBoss = this.enemies.find((e) => e.kind === 'sandworm') || null;
+        if (!this.sandwormBoss && this.bossState === 'fighting' && this.currentRealmId === 'frontier') {
+            // Boss was mid-fight but didn't persist: end the fight rather than soft-lock.
+            this.bossState = 'defeated';
         }
 
         this._refreshEntityColliders();
@@ -1110,6 +1225,7 @@ export class Game {
         if (this.elara) this.elara.update(dt);
         for (const portal of this.portals) portal.update(dt);
         if (this.treasureChest) this.treasureChest.update(dt);
+        for (const pillar of this.pillars) pillar.update(dt);
 
         // Dialog / reward popup freezes the world
         if (this.rewardPopup) {
@@ -1131,6 +1247,7 @@ export class Game {
             return;
         }
 
+        this.player.healingBlocked = this.bossState === 'preparing' || this.bossState === 'fighting';
         this.player.update(dt, this.input, this.world);
         if (this.tombstone) this.tombstone.update(dt);
 
@@ -1236,6 +1353,8 @@ export class Game {
             }
         }
 
+        this._updateBossState(dt);
+
         // Low-health pulse: fades in below 30% HP, pulses with sine, fades out above.
         const hpFrac = this.player.maxHealth > 0 ? this.player.health / this.player.maxHealth : 1;
         if (this.player.health > 0 && hpFrac <= 0.3) {
@@ -1329,6 +1448,12 @@ export class Game {
     }
 
     _activateTombstoneSave() {
+        if (this.bossState === 'preparing' || this.bossState === 'fighting') {
+            this.toast = 'CANNOT HEAL DURING THE BOSS BATTLE';
+            this.toastTimer = 2.2;
+            this._playBeep(280, 0.12, 'square', 0.1);
+            return;
+        }
         // AAA-style checkpoint: named save plus full HP restore.
         this.player.health = this.player.maxHealth;
         if (this.tombstone) this.tombstone.activate();
@@ -1550,6 +1675,48 @@ export class Game {
     _resolveCombat() {
         const attackRect = this.player.getAttackRect();
         if (!attackRect) return;
+
+        // Pillar hits: each swing chips through the stage progression.
+        for (const pillar of this.pillars) {
+            if (pillar.destroyed || !this.player.canHitEnemy(`pillar-${pillar.id}`)) continue;
+            const interact = pillar.getInteractRect();
+            if (!interact || !rectsOverlap(attackRect, interact)) continue;
+
+            const prevStage = pillar.stage;
+            const result = pillar.takeHit(this.player.attackDamage || 1);
+            if (!result.landed) continue;
+            this.player.registerAttackHit(`pillar-${pillar.id}`);
+            this.screenShake = Math.max(this.screenShake, 0.45);
+            this.hitStopTimer = Math.max(this.hitStopTimer, 0.03);
+            this._spawnParticles(pillar.cx, pillar.cy, {
+                count: result.destroyed ? 22 : 8,
+                spread: Math.PI * 2,
+                minSpeed: 30,
+                maxSpeed: 120,
+                friction: 0.88,
+                gravity: 60,
+                life: 0.5,
+                colors: ['#d0a5ff', '#ffffff', '#a0ffdd', '#caa7ff'],
+                size: 2,
+            });
+            this._spawnDamageNumber(pillar.cx, pillar.cy - 8, this.player.attackDamage || 1, {
+                crit: result.destroyed,
+            });
+            if (result.stageChanged) {
+                this.toast = result.destroyed
+                    ? `PILLAR SHATTERED · ${this._pillarsRemaining()} LEFT`
+                    : 'PILLAR CRACKED';
+                this.toastTimer = 1.8;
+                this._playBeep(result.destroyed ? 720 : 520, 0.12, 'triangle', 0.14);
+                if (result.destroyed) {
+                    this._playBeep(960, 0.18, 'sine', 0.12);
+                    this._refreshEntityColliders();
+                    this.screenShake = Math.max(this.screenShake, 0.9);
+                }
+            } else {
+                this._playBeep(380, 0.08, 'square', 0.08);
+            }
+        }
 
         for (const enemy of this.enemies) {
             if (!enemy.isTargetable() || !this.player.canHitEnemy(enemy.id)) continue;
@@ -2057,10 +2224,13 @@ export class Game {
         if (this.currentRealmId !== 'frontier' && (!this.hasReachedCanyons || !this.hasReachedSaltFlats || !this.hasReachedTropics || !this.hasLevelUpAbility)) {
             return 'ENTER THE AMBERWAKE GATE';
         }
-        if (!this.hasReachedCanyons) return 'SCOUT THE RUST-ROCK CANYONS';
-        if (!this.hasReachedSaltFlats) return 'CROSS THE SHIMMERING SALT FLATS';
-        if (!this.hasReachedTropics) return 'DESCEND INTO THE SUNKEN TROPICS';
-        if (!this.hasLevelUpAbility) return 'CLAIM THE SUNKEN RELIC';
+        if (this.bossState === 'preparing') return 'THE GROUND SHAKES BENEATH YOUR FEET';
+        if (this.bossState === 'fighting') return 'DEFEAT THE SAND WORM';
+        if (this.bossState === 'defeated') return 'THE AMBERWAKE IS FREE';
+        if (!this.hasLevelUpAbility) return 'EXPLORE THE AREA AND OPEN THE TREASURE CHEST TO UNLOCK LEVELING UP';
+        if (this.pillars.length > 0 && !this._allPillarsDestroyed()) {
+            return 'DESTROY THE MAGICAL PILLARS IN EACH BIOME';
+        }
         return 'EXPLORE THE SUNCLEFT FRONTIER';
     }
 
@@ -2192,6 +2362,13 @@ export class Game {
             drawables.push({
                 sortY: this.treasureChest.sortY,
                 draw: () => this.treasureChest.draw(ctx),
+            });
+        }
+
+        for (const pillar of this.pillars) {
+            drawables.push({
+                sortY: pillar.sortY,
+                draw: () => pillar.draw(ctx),
             });
         }
 
@@ -2866,6 +3043,50 @@ export class Game {
         font.draw(ctx, label, 91, y - 2, { color: atCap ? '#ffe083' : '#a6ffcb' });
     }
 
+    _drawBossHpBar(ctx) {
+        const boss = this.sandwormBoss;
+        if (!boss) return;
+        const font = this.assets.pixelFont;
+        const ratio = Math.max(0, Math.min(1, boss.health / boss.maxHealth));
+        const barW = 180;
+        const barH = 10;
+        const x = Math.round((NATIVE_WIDTH - barW) / 2);
+        const y = 68;
+        const pulse = Math.sin(this.gameTime * 6) * 0.5 + 0.5;
+
+        // Backdrop frame
+        ctx.fillStyle = 'rgba(7, 11, 19, 0.92)';
+        ctx.fillRect(x - 3, y - 12, barW + 6, barH + 16);
+        ctx.strokeStyle = `rgba(255, 120, 120, ${0.5 + pulse * 0.3})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 2.5, y - 11.5, barW + 5, barH + 15);
+
+        // Label
+        font.draw(ctx, 'SAND WORM', x, y - 10, { color: '#ffd2d2' });
+
+        // Bar interior
+        ctx.fillStyle = '#1a0e0e';
+        ctx.fillRect(x, y, barW, barH);
+        const fillW = Math.max(0, Math.round((barW - 2) * ratio));
+        if (fillW > 0) {
+            // Red gradient with hot streak
+            const grad = ctx.createLinearGradient(x, y, x + fillW, y);
+            grad.addColorStop(0, '#7a1010');
+            grad.addColorStop(0.6, '#e23c3c');
+            grad.addColorStop(1, '#ffb07a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x + 1, y + 1, fillW, barH - 2);
+            ctx.fillStyle = `rgba(255, 230, 200, ${0.18 + pulse * 0.22})`;
+            ctx.fillRect(x + 1, y + 1, fillW, 2);
+        }
+
+        // Pips every 25% for visual cadence
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        for (let p = 1; p < 4; p++) {
+            ctx.fillRect(x + Math.round((barW * p) / 4), y, 1, barH);
+        }
+    }
+
     _drawSkillPointBeacon(ctx) {
         const font = this.assets.pixelFont;
         const pts = this.player.skillPoints;
@@ -3074,6 +3295,10 @@ export class Game {
 
         if (this.hasLevelUpAbility && this.player.skillPoints > 0) {
             this._drawSkillPointBeacon(ctx);
+        }
+
+        if (this.bossState === 'fighting' && this.sandwormBoss) {
+            this._drawBossHpBar(ctx);
         }
 
         // Hide the bottom hint when any other bottom-of-screen element could overlap it:
@@ -3495,6 +3720,8 @@ export class Game {
 
     _updateEnemySpawners(dt) {
         if (!this.hasTalkedToElara || !this.enemySpawnNodes.length) return;
+        // Pause ambient respawns during the boss sequence so the fight stays focused.
+        if (this.bossState === 'preparing' || this.bossState === 'fighting') return;
 
         const aliveEnemies = this.enemies.filter((enemy) => enemy.isAlive());
         if (aliveEnemies.length >= 8) return;
