@@ -1,6 +1,6 @@
 import { NATIVE_WIDTH, NATIVE_HEIGHT, SCALE } from './constants.js?v=20260414-no-bridge-pass2';
 import { Input } from './input.js?v=20260414-no-bridge-pass2';
-import { Player } from './player.js?v=20260415-skilltree-ui';
+import { Player } from './player.js?v=20260416-rpg-expansion';
 import { Camera } from './camera.js?v=20260414-no-bridge-pass2';
 import { World } from './world.js?v=20260416-realm-split';
 import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260416-frontier-rusher-archer-goliath';
@@ -348,6 +348,7 @@ export class Game {
         this.bossHpFlash = 0;
         this.groundShakeTimer = 0;
         this.bossVictoryTimer = 0;
+        this.bossDefeated = { sandworm: false };
         this.gameTime = 0;
         this.screenShake = 0;
         this.objectiveTimer = 8;
@@ -529,11 +530,18 @@ export class Game {
             if (this.sandwormBoss.state === 'dead' || !this.sandwormBoss.isAlive()) {
                 this.bossState = 'defeated';
                 this.bossVictoryTimer = 4.0;
-                this.toast = 'THE SAND WORM FALLS';
-                this.toastTimer = 3.4;
+                this.toast = 'THE SAND WORM FALLS — AMBER CAPSTONES UNLOCKED';
+                this.toastTimer = 3.8;
                 this.screenShake = Math.max(this.screenShake, 1.0);
                 this._playBeep(960, 0.2, 'triangle', 0.22);
                 this._playBeep(1280, 0.3, 'sine', 0.16);
+                this.bossDefeated.sandworm = true;
+                // Big XP payout on kill.
+                if (this.hasLevelUpAbility && this.sandwormBoss) {
+                    this._awardXp(400, this.sandwormBoss.cx, this.sandwormBoss.cy - 10);
+                }
+                // Re-read ability rows so locked skills become spendable.
+                this._syncAbilityLockedRows?.();
             }
         }
 
@@ -552,8 +560,39 @@ export class Game {
             x: targetX - 60,
             y: targetY - 30,
         });
-        this.enemies.push(spawn);
+        // Clear any lingering trash mobs so the arena is a one-on-one fight.
+        for (const enemy of this.enemies) {
+            if (enemy === spawn || !enemy.isAlive()) continue;
+            this._spawnParticles(enemy.cx, enemy.cy, {
+                count: 6,
+                spread: Math.PI * 2,
+                minSpeed: 20,
+                maxSpeed: 80,
+                friction: 0.9,
+                gravity: 0,
+                life: 0.4,
+                colors: ['#ffe0a2', '#c89460', '#ffffff'],
+                size: 2,
+            });
+        }
+        this.enemies = this.enemies.filter((e) => !e.isAlive() ? false : e === spawn || e.kind === 'sandworm');
+        if (!this.enemies.includes(spawn)) this.enemies.push(spawn);
         this.sandwormBoss = spawn;
+
+        // Shove the player out to a safe minimum radius so they aren't stood on.
+        const minDist = 64;
+        const pdx = this.player.cx - spawn.cx;
+        const pdy = this.player.cy - spawn.cy;
+        const dist = Math.hypot(pdx, pdy);
+        if (dist < minDist) {
+            const nx = dist > 0.01 ? pdx / dist : -1;
+            const ny = dist > 0.01 ? pdy / dist : 0;
+            this.player.x = spawn.cx + nx * minDist - this.player.w / 2;
+            this.player.y = spawn.cy + ny * minDist - this.player.h / 2;
+            this.player.invulnTimer = Math.max(this.player.invulnTimer, 0.9);
+        }
+        this._refreshEntityColliders();
+
         // Big emerge burst of sand particles.
         this._spawnParticles(spawn.cx, spawn.cy + 10, {
             count: 36,
@@ -655,8 +694,9 @@ export class Game {
         // Re-attach the live boss reference if the realm snapshot had one.
         this.sandwormBoss = this.enemies.find((e) => e.kind === 'sandworm') || null;
         if (!this.sandwormBoss && this.bossState === 'fighting' && this.currentRealmId === 'frontier') {
-            // Boss was mid-fight but didn't persist: end the fight rather than soft-lock.
-            this.bossState = 'defeated';
+            // Boss was mid-fight but the worm didn't persist — re-spawn it so the
+            // player can't cheese the fight by hopping realms.
+            this._spawnSandwormBoss();
         }
 
         this._refreshEntityColliders();
@@ -1493,6 +1533,13 @@ export class Game {
 
     _activatePortal(portal) {
         if (!portal) return;
+        const midBoss = this.bossState === 'preparing' || this.bossState === 'fighting';
+        if (midBoss && portal.targetRealmId !== this.currentRealmId) {
+            this.toast = 'THE AMBERWAKE WILL NOT RELEASE YOU';
+            this.toastTimer = 1.8;
+            this._playBeep(220, 0.12, 'square', 0.14);
+            return;
+        }
         this._switchRealm(portal.targetRealmId, portal.arrivalKey);
     }
 
@@ -1712,19 +1759,37 @@ export class Game {
                     this._playBeep(960, 0.18, 'sine', 0.12);
                     this._refreshEntityColliders();
                     this.screenShake = Math.max(this.screenShake, 0.9);
+                    if (this.hasLevelUpAbility) {
+                        this._awardXp(18, pillar.cx, pillar.cy - 10);
+                    }
                 }
             } else {
                 this._playBeep(380, 0.08, 'square', 0.08);
             }
         }
 
+        // Amberwake cleave (every 5th swing): apply a 360° hit around the player
+        // before the normal swing loop, so the swing still lands its directional hit.
+        if (this.player.pendingAmberwakeCleave) {
+            this.player.pendingAmberwakeCleave = false;
+            this._fireAmberwakeCleave();
+        }
+
         for (const enemy of this.enemies) {
             if (!enemy.isTargetable() || !this.player.canHitEnemy(enemy.id)) continue;
             if (!rectsOverlap(attackRect, enemy.getHitbox())) continue;
 
-            if (enemy.takeHit(this.player.attackDirection, this.player.attackDamage)) {
+            // Damage calc: crit roll, combo multiplier. Each lands as integer damage.
+            const isCrit = Math.random() < (this.player.critChance || 0);
+            const critMult = isCrit ? 2 : 1;
+            const comboMult = this.player.comboDamageMult ? this.player.comboDamageMult() : 1;
+            const dmg = Math.max(1, Math.round(this.player.attackDamage * critMult * comboMult));
+
+            if (enemy.takeHit(this.player.attackDirection, dmg)) {
                 this.player.registerAttackHit(enemy.id);
-                this.screenShake = Math.max(this.screenShake, 0.55);
+                this.player.registerComboHit();
+                this.screenShake = Math.max(this.screenShake, isCrit ? 0.85 : 0.55);
+                if (enemy === this.sandwormBoss) this.bossHpFlash = 0.3;
                 const slain = enemy.health <= 0;
                 this.toast = slain
                     ? `${enemy.toastLabel} PURGED`
@@ -1738,23 +1803,34 @@ export class Game {
                 const hitY = hb.y + hb.h / 2;
                 const hitAngle = this._directionToAngle(this.player.attackDirection);
                 this._spawnParticles(hitX, hitY, {
-                    count: 8,
+                    count: isCrit ? 14 : 8,
                     angle: hitAngle,
                     spread: Math.PI * 0.55,
                     minSpeed: 50,
-                    maxSpeed: 130,
+                    maxSpeed: isCrit ? 170 : 130,
                     friction: 0.86,
                     gravity: 60,
                     life: 0.32,
-                    colors: ['#ffffff', '#ffe78a', '#a6ffcb'],
+                    colors: isCrit ? ['#ffffff', '#ffe78a', '#ff9f4a'] : ['#ffffff', '#ffe78a', '#a6ffcb'],
                     size: 2,
                 });
-                this.hitStopTimer = Math.max(this.hitStopTimer, 0.035);
-                this._spawnDamageNumber(hitX, hitY - 4, this.player.attackDamage, {
-                    crit: slain && this.player.attackDamage > 1,
+                this.hitStopTimer = Math.max(this.hitStopTimer, isCrit ? 0.06 : 0.035);
+                this._spawnDamageNumber(hitX, hitY - 4, dmg, {
+                    crit: isCrit || (slain && dmg > 1),
                 });
 
                 if (slain) {
+                    // Lifesteal / amber-echo haste hooks fire on any kill.
+                    if (Math.random() < (this.player.lifestealChance || 0)) {
+                        this.player.health = Math.min(this.player.maxHealth, this.player.health + 1);
+                        this._spawnParticles(this.player.cx, this.player.cy - 6, {
+                            count: 6, spread: Math.PI * 2, minSpeed: 20, maxSpeed: 55,
+                            friction: 0.9, gravity: -20, life: 0.5,
+                            colors: ['#ff8fae', '#ff5577', '#ffffff'], size: 2,
+                        });
+                    }
+                    this.player.onEnemySlain?.();
+
                     this._spawnParticles(hitX, hitY, {
                         count: 18,
                         spread: Math.PI * 2,
@@ -1797,6 +1873,51 @@ export class Game {
             case 2: return 0;                // RIGHT
             case 3: return -Math.PI / 2;     // UP
             default: return Math.PI / 2;     // DOWN
+        }
+    }
+
+    _fireAmberwakeCleave() {
+        const px = this.player.cx;
+        const py = this.player.cy;
+        const radius = 56;
+        const dmg = Math.max(2, this.player.attackDamage + 1);
+
+        this.screenShake = Math.max(this.screenShake, 1.0);
+        this.hitStopTimer = Math.max(this.hitStopTimer, 0.05);
+        this._playBeep(640, 0.14, 'triangle', 0.2);
+        this._playBeep(980, 0.18, 'sine', 0.14);
+
+        // Amber ring burst
+        this._spawnParticles(px, py, {
+            count: 42,
+            spread: Math.PI * 2,
+            minSpeed: 80,
+            maxSpeed: 180,
+            friction: 0.92,
+            gravity: 0,
+            life: 0.55,
+            colors: ['#ffd98a', '#ffa24e', '#ff6ec7', '#ffffff'],
+            size: 2,
+        });
+
+        for (const enemy of this.enemies) {
+            if (!enemy.isTargetable()) continue;
+            const ecx = enemy.cx;
+            const ecy = enemy.cy;
+            const dx = ecx - px;
+            const dy = ecy - py;
+            if (dx * dx + dy * dy > radius * radius) continue;
+
+            // Cleave ignores the swing's per-enemy lockout.
+            if (enemy.takeHit(this.player.attackDirection, dmg)) {
+                if (enemy === this.sandwormBoss) this.bossHpFlash = 0.35;
+                this._spawnDamageNumber(ecx, ecy - 6, dmg, { crit: true });
+                const slain = enemy.health <= 0;
+                if (slain && this.hasLevelUpAbility) {
+                    this._awardXp(enemy.xpReward || 1, enemy.cx, enemy.y + 4);
+                    this.player.onEnemySlain?.();
+                }
+            }
         }
     }
 
@@ -2129,11 +2250,29 @@ export class Game {
 
     _updateLevelProgressFx(dt) {
         if (this.xpPopups && this.xpPopups.length) {
+            const magnetR = this.player?.pickupRadius || 0;
+            const pcx = this.player?.cx ?? 0;
+            const pcy = this.player?.cy ?? 0;
             for (let i = this.xpPopups.length - 1; i >= 0; i--) {
                 const p = this.xpPopups[i];
                 p.timer -= dt;
-                p.y += p.vy * dt;
-                p.vy += 14 * dt;
+                // Soul Magnet: popups past base radius drift toward the player.
+                if (magnetR > 32) {
+                    const dx = pcx - p.x;
+                    const dy = pcy - p.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    if (dist < magnetR * 1.6) {
+                        const pull = 130 * dt;
+                        p.x += (dx / dist) * pull;
+                        p.y += (dy / dist) * pull;
+                    } else {
+                        p.y += p.vy * dt;
+                        p.vy += 14 * dt;
+                    }
+                } else {
+                    p.y += p.vy * dt;
+                    p.vy += 14 * dt;
+                }
                 if (p.timer <= 0) this.xpPopups.splice(i, 1);
             }
         }
@@ -2229,7 +2368,8 @@ export class Game {
         if (this.bossState === 'defeated') return 'THE AMBERWAKE IS FREE';
         if (!this.hasLevelUpAbility) return 'EXPLORE THE AREA AND OPEN THE TREASURE CHEST TO UNLOCK LEVELING UP';
         if (this.pillars.length > 0 && !this._allPillarsDestroyed()) {
-            return 'DESTROY THE MAGICAL PILLARS IN EACH BIOME';
+            const done = this.pillars.length - this._pillarsRemaining();
+            return `DESTROY THE MAGICAL PILLARS ${done}/${this.pillars.length}`;
         }
         return 'EXPLORE THE SUNCLEFT FRONTIER';
     }
@@ -2595,8 +2735,8 @@ export class Game {
 
         if (this.input.wasPressed('Space') || this.input.wasPressed('Enter')) {
             const def = this._currentSkillDef();
-            if (def && this.player.canSpend(def.id)) {
-                if (this.player.spendSkillPoint(def.id)) {
+            if (def && this.player.canSpend(def.id, this.bossDefeated)) {
+                if (this.player.spendSkillPoint(def.id, this.bossDefeated)) {
                     this.skillSpendFlash = 1;
                     this.skillUpgradeShines[def.id] = 1;
                     this.skillHintPulse = 0;
@@ -2674,12 +2814,12 @@ export class Game {
         font.draw(ctx, ptsText, subStartX + font.measure(lvText, 1) + 10, 30, { color: pointsColor });
 
         // columns
-        const columnWidth = 76;
-        const columnGap = 4;
+        const columnWidth = 80;
+        const columnGap = 2;
         const totalColsW = columnWidth * SKILL_COLUMNS.length + columnGap * (SKILL_COLUMNS.length - 1);
         const colsStartX = Math.round((NATIVE_WIDTH - totalColsW) / 2);
-        const colsY = 44;
-        const colsH = 116;
+        const colsY = 40;
+        const colsH = 134;
 
         for (let c = 0; c < SKILL_COLUMNS.length; c++) {
             const columnKey = SKILL_COLUMNS[c];
@@ -2795,7 +2935,8 @@ export class Game {
     _drawSkillCell(ctx, def, theme, x, y, w, h, selected, pulse) {
         const font = this.assets.pixelFont;
         const rank = this.player.getSkillRank(def.id);
-        const canSpend = this.player.canSpend(def.id);
+        const canSpend = this.player.canSpend(def.id, this.bossDefeated);
+        const lockedByBoss = !!(def.requires && !(this.bossDefeated && this.bossDefeated[def.requires]));
         const atMax = rank >= def.maxRank;
         const upgradeShine = this.skillUpgradeShines[def.id] || 0;
         const upgradeFlashVisible =
@@ -2839,30 +2980,30 @@ export class Game {
             ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
         }
 
-        // icon
-        const iconSize = 16;
-        const iconX = x + Math.round((w - iconSize) / 2);
-        const iconY = y + 4;
+        // icon (compact horizontal cell: icon on left, name+pips on right)
+        const iconSize = 12;
+        const iconX = x + 3;
+        const iconY = y + Math.round((h - iconSize) / 2);
         const iconColor = upgradeFlashVisible ? '#ffe78a' : theme.accent;
         this._drawSkillIcon(ctx, def.icon, iconX, iconY, iconSize, iconColor, rank > 0);
 
-        // name
-        const nameW = font.measure(def.name, 1);
+        // name (right of icon)
+        const textX = iconX + iconSize + 3;
         const nameColor = upgradeFlashVisible
             ? '#fff4bf'
             : (canSpend
                 ? '#fff1b5'
-                : (atMax ? theme.accent : (rank > 0 ? '#d6e9ff' : '#97a8c4')));
-        font.draw(ctx, def.name, x + Math.round((w - nameW) / 2), iconY + iconSize + 2, {
-            color: nameColor,
-        });
+                : (lockedByBoss
+                    ? '#6a7a94'
+                    : (atMax ? theme.accent : (rank > 0 ? '#d6e9ff' : '#97a8c4'))));
+        const displayName = lockedByBoss ? '???' : def.name;
+        font.draw(ctx, displayName, textX, y + 3, { color: nameColor });
 
-        // rank pips
-        const pipSize = 4;
-        const pipGap = 2;
-        const pipsW = def.maxRank * pipSize + (def.maxRank - 1) * pipGap;
-        const pipsX = x + Math.round((w - pipsW) / 2);
-        const pipsY = iconY + iconSize + 12;
+        // rank pips (compact row under name, right side)
+        const pipSize = 3;
+        const pipGap = 1;
+        const pipsX = textX;
+        const pipsY = y + h - 5;
         for (let i = 0; i < def.maxRank; i++) {
             const px = pipsX + i * (pipSize + pipGap);
             if (i < rank) {
@@ -2879,22 +3020,30 @@ export class Game {
             }
         }
 
-        // "NEW" or "MAX" badge
+        // "NEW" / "MAX" / LOCK badge (right side, vertically centered)
         if (canSpend) {
             const flicker = Math.floor(this.gameTime * 5) % 2;
             if (flicker) {
-                const tag = 'K!';
+                const tag = '!';
                 const tw = font.measure(tag, 1);
+                const bY = y + Math.round((h - 9) / 2);
                 ctx.fillStyle = 'rgba(255, 231, 138, 0.95)';
-                ctx.fillRect(x + w - tw - 5, y + 2, tw + 3, 9);
-                font.draw(ctx, tag, x + w - tw - 4, y + 3, { color: '#2a1d06' });
+                ctx.fillRect(x + w - tw - 4, bY, tw + 3, 9);
+                font.draw(ctx, tag, x + w - tw - 3, bY + 1, { color: '#2a1d06' });
             }
         } else if (atMax) {
-            const tag = 'MAX';
+            const tag = 'M';
             const tw = font.measure(tag, 1);
+            const bY = y + Math.round((h - 9) / 2);
             ctx.fillStyle = theme.accent;
-            ctx.fillRect(x + w - tw - 5, y + 2, tw + 3, 9);
-            font.draw(ctx, tag, x + w - tw - 4, y + 3, { color: '#0a1020' });
+            ctx.fillRect(x + w - tw - 4, bY, tw + 3, 9);
+            font.draw(ctx, tag, x + w - tw - 3, bY + 1, { color: '#0a1020' });
+        } else if (lockedByBoss) {
+            const bY = y + Math.round((h - 7) / 2);
+            ctx.fillStyle = 'rgba(106, 122, 148, 0.6)';
+            ctx.fillRect(x + w - 8, bY, 5, 7);
+            ctx.fillStyle = 'rgba(12, 18, 34, 0.9)';
+            ctx.fillRect(x + w - 7, bY + 3, 3, 3);
         }
     }
 
@@ -3051,7 +3200,7 @@ export class Game {
         const barW = 180;
         const barH = 10;
         const x = Math.round((NATIVE_WIDTH - barW) / 2);
-        const y = 68;
+        const y = NATIVE_HEIGHT - 22;
         const pulse = Math.sin(this.gameTime * 6) * 0.5 + 0.5;
 
         // Backdrop frame
@@ -3078,6 +3227,10 @@ export class Game {
             ctx.fillRect(x + 1, y + 1, fillW, barH - 2);
             ctx.fillStyle = `rgba(255, 230, 200, ${0.18 + pulse * 0.22})`;
             ctx.fillRect(x + 1, y + 1, fillW, 2);
+            if (this.bossHpFlash > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.65, this.bossHpFlash * 2.2)})`;
+                ctx.fillRect(x + 1, y + 1, fillW, barH - 2);
+            }
         }
 
         // Pips every 25% for visual cadence
@@ -3260,6 +3413,27 @@ export class Game {
 
         if (this.hasLevelUpAbility) this._drawExpBar(ctx, barX, barY + 8, barW);
 
+        // Combo meter: fills with consecutive hits, taps at 10/25/50 for damage
+        // tier bumps (5/10/15% mult from Player.comboDamageMult).
+        if (this.hasLevelUpAbility && this.player.comboCount >= 3) {
+            const comboY = barY + (this.hasLevelUpAbility ? 14 : 8);
+            const combo = Math.min(50, this.player.comboCount);
+            const ratio = combo / 50;
+            const decay = Math.max(0, Math.min(1, this.player.comboTimer / 2.5));
+            const tier = combo >= 50 ? 3 : combo >= 25 ? 2 : combo >= 10 ? 1 : 0;
+            const colors = ['#ffe78a', '#ffb45a', '#ff6ec7', '#8fdfff'];
+            ctx.fillStyle = '#130f1b';
+            ctx.fillRect(barX, comboY, barW, 3);
+            ctx.fillStyle = colors[tier];
+            ctx.fillRect(barX + 1, comboY + 1, Math.max(0, (barW - 2) * ratio), 1);
+            if (decay < 1) {
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(barX + 1 + Math.round((barW - 2) * ratio), comboY + 1, 1, 1);
+            }
+            const comboText = tier > 0 ? `X${combo}` : `${combo}`;
+            font.draw(ctx, comboText, barX + barW + 3, comboY - 3, { color: colors[tier] });
+        }
+
         // Cooldown pips: attack on the left, dash on the right.
         const pipY = 6 + panelH - 9;
         this._drawCooldownPip(ctx, 12, pipY, 'ATK',
@@ -3312,7 +3486,8 @@ export class Game {
         const interactPromptActive = !this.dialog && !this.rewardPopup && !this.worldMapOpen && !this.deathState && (
             this._playerNearElara() || this._playerNearTombstone() || (this._playerNearTreasureChest() && !this.hasLevelUpAbility)
         );
-        if (this.settings.showHints && this.gameTime < 10 && !enemyNearby && !interactPromptActive) {
+        const bossActive = this.bossState === 'preparing' || this.bossState === 'fighting';
+        if (this.settings.showHints && this.gameTime < 10 && !enemyNearby && !interactPromptActive && !bossActive) {
             const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
             ctx.fillStyle = `rgba(7, 11, 19, ${0.78 * alpha})`;
             ctx.fillRect(42, NATIVE_HEIGHT - 24, 174, 18);
@@ -3332,6 +3507,7 @@ export class Game {
 
         for (const enemy of this.enemies) {
             if (!enemy.isAlive()) continue;
+            if (enemy === this.sandwormBoss) continue;
             const dx = enemy.cx - this.player.cx;
             const dy = enemy.cy - this.player.cy;
             if (dx * dx + dy * dy > 88 * 88) continue;

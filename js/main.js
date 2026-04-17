@@ -1,5 +1,5 @@
-import { loadGameAssets } from './assets.js?v=20260416-pillars-boss';
-import { Game } from './game.js?v=20260416-pillars-boss';
+import { loadGameAssets } from './assets.js?v=20260416-rpg-expansion';
+import { Game } from './game.js?v=20260416-rpg-expansion';
 
 try {
     localStorage.removeItem('zendoria-save-v1');

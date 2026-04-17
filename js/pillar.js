@@ -51,11 +51,13 @@ export class Pillar {
 
     getInteractRect() {
         if (this.destroyed) return null;
+        const w = Math.max(18, Math.round(this.drawW * 0.72));
+        const h = Math.max(20, Math.round(this.drawH * 0.58));
         return {
-            x: this.x - 4,
-            y: this.y - 6,
-            w: this.drawW + 8,
-            h: this.drawH + 10,
+            x: Math.round(this.cx - w / 2),
+            y: Math.round(this.y + this.drawH - h),
+            w,
+            h,
         };
     }
 
