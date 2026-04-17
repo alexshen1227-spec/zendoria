@@ -401,7 +401,9 @@ export class Game {
 
     _createEnemies(savedEnemies = null) {
         if (!savedEnemies) {
-            return this.world.fixedEnemySpawns.map((spawn) => this._spawnEnemy(spawn));
+            return this.world.fixedEnemySpawns
+                .filter((spawn) => spawn.kind !== 'goliath' || this.goliathsUnlocked)
+                .map((spawn) => this._spawnEnemy(spawn));
         }
 
         return savedEnemies
@@ -424,6 +426,19 @@ export class Game {
             ...node,
             timer: 7 + index * 3,
         }));
+    }
+
+    _spawnDeferredGoliaths() {
+        if (this.currentRealmId !== 'frontier') return;
+        const goliathSpawns = this.world.fixedEnemySpawns.filter((s) => s.kind === 'goliath');
+        for (const spawn of goliathSpawns) {
+            const already = this.enemies.some((e) =>
+                e.kind === 'goliath' &&
+                Math.abs(e.x - spawn.x) < 32 &&
+                Math.abs(e.y - spawn.y) < 32);
+            if (already) continue;
+            this.enemies.push(this._spawnEnemy(spawn));
+        }
     }
 
     _spawnEnemy(spawnDef) {
@@ -758,6 +773,8 @@ export class Game {
 
     _resetRunUnlocks() {
         this.hasLevelUpAbility = false;
+        this.goliathsUnlocked = false;
+        this.goliathUnlockTimer = 0;
     }
 
     _startNewGame() {
@@ -1012,6 +1029,8 @@ export class Game {
         this.hasTalkedToElara = !!save.hasTalkedToElara;
         this.hasMap = !!save.hasMap;
         this.hasLevelUpAbility = !!save.hasLevelUpAbility;
+        this.goliathsUnlocked = this.hasLevelUpAbility;
+        this.goliathUnlockTimer = 0;
         this.realmStates = {};
         if (save.realmStates && typeof save.realmStates === 'object') {
             const driftmereState = save.realmStates.driftmere;
@@ -1209,6 +1228,14 @@ export class Game {
         this._updateParticles(dt);
         this._updateDamageNumbers(dt);
 
+        if (this.goliathUnlockTimer > 0) {
+            this.goliathUnlockTimer = Math.max(0, this.goliathUnlockTimer - dt);
+            if (this.goliathUnlockTimer === 0 && !this.goliathsUnlocked) {
+                this.goliathsUnlocked = true;
+                this._spawnDeferredGoliaths();
+            }
+        }
+
         // Low-health pulse: fades in below 30% HP, pulses with sine, fades out above.
         const hpFrac = this.player.maxHealth > 0 ? this.player.health / this.player.maxHealth : 1;
         if (this.player.health > 0 && hpFrac <= 0.3) {
@@ -1317,6 +1344,10 @@ export class Game {
         if (!this.treasureChest || this.hasLevelUpAbility) return;
 
         this.hasLevelUpAbility = true;
+        // Goliaths in the tropics blocked the path TO the relic — give the
+        // player a 5s grace window after claiming it before they spawn.
+        this.goliathsUnlocked = false;
+        this.goliathUnlockTimer = 5;
         this.treasureChest.setOpened(true);
         this._syncAbilityLockedRows();
         this.toast = 'SUNKEN RELIC CLAIMED';
@@ -3469,6 +3500,7 @@ export class Game {
         if (aliveEnemies.length >= 8) return;
 
         for (const node of this.enemySpawnNodes) {
+            if (node.kind === 'goliath' && !this.goliathsUnlocked) continue;
             node.timer -= dt;
             if (node.timer > 0) continue;
             node.timer = node.interval;
