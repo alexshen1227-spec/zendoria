@@ -377,6 +377,7 @@ export class Game {
         this.hitStopTimer = 0;
         this.levelUpAnim = null;
         this.levelUpFlash = 0;
+        this.levelUpRings = [];
         this.expBarPulse = 0;
         this.skillTreeOpen = false;
         this.skillTreeSelection = { column: 1, row: 0 };
@@ -1787,7 +1788,8 @@ export class Game {
 
             if (enemy.takeHit(this.player.attackDirection, dmg)) {
                 this.player.registerAttackHit(enemy.id);
-                this.player.registerComboHit();
+                const newTier = this.player.registerComboHit();
+                if (newTier > 0) this._onComboTierReached(newTier, enemy.cx, enemy.y);
                 this.screenShake = Math.max(this.screenShake, isCrit ? 0.85 : 0.55);
                 if (enemy === this.sandwormBoss) this.bossHpFlash = 0.3;
                 const slain = enemy.health <= 0;
@@ -2197,16 +2199,36 @@ export class Game {
         ctx.globalAlpha = 1;
     }
 
+    _onComboTierReached(tier, worldX, worldY) {
+        const tierNames = ['', 'GOOD!', 'GREAT!', 'LEGEND!'];
+        const bonusXp = [0, 12, 30, 60][tier] || 0;
+        const tierLabel = tierNames[tier] || '';
+        this.toast = `COMBO ${tierLabel}`;
+        this.toastTimer = 1.4;
+        this.screenShake = Math.max(this.screenShake, 0.6 + tier * 0.25);
+        this._playBeep(440 + tier * 160, 0.12, 'triangle', 0.12);
+        this._playBeep(660 + tier * 180, 0.18, 'sine', 0.10);
+        if (bonusXp > 0) this._awardXp(bonusXp, worldX, worldY - 12);
+        // Legend tier also restores 1 HP as the headline payoff.
+        if (tier >= 3 && this.player.health < this.player.maxHealth) {
+            this.player.health = Math.min(this.player.maxHealth, this.player.health + 1);
+        }
+    }
+
     _awardXp(amount, worldX, worldY) {
         if (!amount) return;
-        const boosted = Math.max(1, Math.round(amount * (this.player.xpMultiplier || 1)));
+        const xpMult = this.player.xpMultiplier || 1;
+        const comboMult = this.player.comboXpMult ? this.player.comboXpMult() : 1;
+        const boosted = Math.max(1, Math.round(amount * xpMult * comboMult));
+        const comboBonus = comboMult > 1;
         this.xpPopups.push({
             x: worldX,
             y: worldY,
             vy: -22,
-            text: `${boosted} XP`,
-            timer: 0.9,
-            maxTimer: 0.9,
+            text: comboBonus ? `+${boosted} XP!` : `${boosted} XP`,
+            timer: comboBonus ? 1.1 : 0.9,
+            maxTimer: comboBonus ? 1.1 : 0.9,
+            isCombo: comboBonus,
         });
         this.expBarPulse = 1;
         this._playBeep(780, 0.05, 'triangle', 0.08);
@@ -2240,6 +2262,24 @@ export class Game {
         this.screenShake = Math.max(this.screenShake, 1.1);
         this.toast = `LEVEL ${newLevel}!`;
         this.toastTimer = 2.4;
+
+        // Expanding golden ring pulses outward from the player as a fanfare.
+        this.levelUpRings = [
+            { x: this.player.cx, y: this.player.cy - 8, t: 0, maxT: 0.9 },
+            { x: this.player.cx, y: this.player.cy - 8, t: -0.12, maxT: 0.9 },
+            { x: this.player.cx, y: this.player.cy - 8, t: -0.24, maxT: 0.9 },
+        ];
+        // Confetti-style sparkle burst around the player.
+        this._spawnParticles(this.player.cx, this.player.cy - 6, {
+            count: 32,
+            angle: -Math.PI / 2,
+            spread: Math.PI * 2,
+            minSpeed: 60,
+            maxSpeed: 160,
+            life: 0.9,
+            color: '#ffe78a',
+            size: 2,
+        });
 
         // Triumphant chord.
         this._playBeep(523, 0.18, 'triangle', 0.18);
@@ -2283,6 +2323,14 @@ export class Game {
         }
 
         this.levelUpFlash = Math.max(0, this.levelUpFlash - dt * 2.8);
+        if (this.levelUpRings && this.levelUpRings.length) {
+            for (let i = this.levelUpRings.length - 1; i >= 0; i--) {
+                this.levelUpRings[i].t += dt;
+                if (this.levelUpRings[i].t >= this.levelUpRings[i].maxT) {
+                    this.levelUpRings.splice(i, 1);
+                }
+            }
+        }
         this.expBarPulse = Math.max(0, this.expBarPulse - dt * 2.2);
         this.skillHintPulse = Math.max(0, this.skillHintPulse - dt * 1.2);
         this.skillSpendFlash = Math.max(0, this.skillSpendFlash - dt * 2.8);
@@ -2398,6 +2446,7 @@ export class Game {
         this._drawProjectiles(ctx);
         this._drawSwingFx(ctx);
         this._drawParticles(ctx);
+        this._drawLevelUpRings(ctx);
         this._drawXpPopups(ctx);
         this._drawDamageNumbers(ctx);
         this.camera.end(ctx);
@@ -3195,6 +3244,99 @@ export class Game {
         font.draw(ctx, label, 91, y - 2, { color: atCap ? '#ffe083' : '#a6ffcb' });
     }
 
+    _drawComboMeter(ctx) {
+        const font = this.assets.pixelFont;
+        const p = this.player;
+        const combo = p.comboCount;
+        const tier = p.comboTier;
+        const tierNames = ['', 'GOOD!', 'GREAT!', 'LEGEND!'];
+        const tierColors = ['#ffe78a', '#ffd27b', '#ff9e5a', '#ff6ec7'];
+        const tierGlows = ['rgba(255,231,138,', 'rgba(255,180,90,', 'rgba(255,110,90,', 'rgba(255,110,199,'];
+        const color = tierColors[Math.min(tier + 1, tierColors.length - 1)];
+        const glow = tierGlows[Math.min(tier + 1, tierGlows.length - 1)];
+
+        // Hit pulse gives the number a scale bump + brightness flash.
+        const pulse = p.comboPulse || 0;
+        const tierPulse = p.comboTierPulse || 0;
+        const scale = tier >= 1 ? 2 : 1;
+
+        // Layout block: sits below the top-left HUD panel so it doesn't cover cooldown pips.
+        const hudPanelBottom = this.hasLevelUpAbility ? 60 : 50;
+        const centerX = 58;
+        const baseY = hudPanelBottom + 6;
+
+        // Backing glow plate — thicker as tier rises, pulses on each hit.
+        const plateW = 96;
+        const plateH = tier >= 1 ? 22 : 16;
+        const plateX = centerX - plateW / 2;
+        const plateY = baseY - 4;
+        const plateAlpha = 0.62 + pulse * 0.2;
+        ctx.fillStyle = `rgba(7, 11, 19, ${plateAlpha})`;
+        ctx.fillRect(plateX, plateY, plateW, plateH);
+        ctx.fillStyle = `${glow}${0.25 + pulse * 0.35 + tierPulse * 0.3})`;
+        ctx.fillRect(plateX, plateY, plateW, plateH);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(plateX + 0.5, plateY + 0.5, plateW - 1, plateH - 1);
+
+        // Radial ring flash when a new tier is reached.
+        if (tierPulse > 0) {
+            const rings = 3;
+            for (let i = 0; i < rings; i++) {
+                const t = Math.max(0, tierPulse - i * 0.12);
+                if (t <= 0) continue;
+                const r = (1 - t) * 26 + 8;
+                ctx.strokeStyle = `${glow}${t * 0.6})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(centerX, baseY + 6, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        // Big combo number — scale 2 once a real tier is hit.
+        const numText = `x${combo}`;
+        const numScale = scale + (pulse > 0 ? Math.min(0.6, pulse * 0.6) : 0);
+        // font.measure only supports int scale; measure at base scale and extrapolate.
+        const baseW = font.measure(numText, scale);
+        const drawX = Math.round(centerX - baseW / 2);
+        const drawY = tier >= 1 ? baseY - 1 : baseY;
+        // Shadow for legibility over bright tier colors.
+        font.draw(ctx, numText, drawX + 1, drawY + 1, { color: 'rgba(0,0,0,0.55)', scale });
+        font.draw(ctx, numText, drawX, drawY, { color, scale });
+
+        // Tier label beneath number.
+        if (tier >= 1) {
+            const label = tierNames[tier];
+            const labelW = font.measure(label, 1);
+            const labelY = drawY + 9 * scale + 1;
+            const labelColor = tierPulse > 0.1
+                ? (Math.floor(this.gameTime * 16) % 2 ? '#fff4bf' : color)
+                : color;
+            font.draw(ctx, label, centerX - labelW / 2 + 1, labelY + 1, { color: 'rgba(0,0,0,0.5)' });
+            font.draw(ctx, label, centerX - labelW / 2, labelY, { color: labelColor });
+        }
+
+        // Decay ticker — thin bar at the bottom of the plate shrinks as combo ages.
+        const decay = Math.max(0, Math.min(1, p.comboTimer / 2.5));
+        const decayY = plateY + plateH - 2;
+        const decayW = Math.round((plateW - 4) * decay);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(plateX + 2, decayY, plateW - 4, 1);
+        ctx.fillStyle = color;
+        ctx.fillRect(plateX + 2, decayY, decayW, 1);
+
+        // Edge glow at SAVAGE+ (tier 2+) — subtle vignette around the whole screen.
+        if (tier >= 2) {
+            const edgeAlpha = 0.05 + tierPulse * 0.08 + Math.sin(this.gameTime * 6) * 0.01;
+            ctx.fillStyle = `${glow}${edgeAlpha})`;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, 4);
+            ctx.fillRect(0, NATIVE_HEIGHT - 4, NATIVE_WIDTH, 4);
+            ctx.fillRect(0, 0, 4, NATIVE_HEIGHT);
+            ctx.fillRect(NATIVE_WIDTH - 4, 0, 4, NATIVE_HEIGHT);
+        }
+    }
+
     _drawBossHpBar(ctx) {
         const boss = this.sandwormBoss;
         if (!boss) return;
@@ -3291,16 +3433,38 @@ export class Game {
         }
     }
 
+    _drawLevelUpRings(ctx) {
+        if (!this.levelUpRings || !this.levelUpRings.length) return;
+        for (const ring of this.levelUpRings) {
+            if (ring.t < 0) continue;
+            const u = Math.max(0, Math.min(1, ring.t / ring.maxT));
+            const r = 6 + u * 54;
+            const alpha = (1 - u) * 0.85;
+            ctx.strokeStyle = `rgba(255, 231, 138, ${alpha})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ring.x, ring.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.55})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(ring.x, ring.y, r - 2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
     _drawXpPopups(ctx) {
         if (!this.xpPopups || this.xpPopups.length === 0) return;
         const font = this.assets.pixelFont;
         for (const p of this.xpPopups) {
             const t = 1 - Math.max(0, p.timer / p.maxTimer);
             const alpha = p.timer > 0.25 ? 1 : Math.max(0, p.timer / 0.25);
-            const yOff = Math.round(p.y - t * 4);
-            const xOff = Math.round(p.x - font.measure(p.text, 1) / 2);
-            font.draw(ctx, p.text, xOff + 1, yOff + 1, { color: 'rgba(5, 10, 20, 0.75)', alpha });
-            font.draw(ctx, p.text, xOff, yOff, { color: '#a6ffcb', alpha });
+            const scale = p.isCombo ? 2 : 1;
+            const yOff = Math.round(p.y - t * (p.isCombo ? 8 : 4));
+            const xOff = Math.round(p.x - font.measure(p.text, scale) / 2);
+            const color = p.isCombo ? '#ffd27b' : '#a6ffcb';
+            font.draw(ctx, p.text, xOff + 1, yOff + 1, { color: 'rgba(5, 10, 20, 0.75)', alpha, scale });
+            font.draw(ctx, p.text, xOff, yOff, { color, alpha, scale });
         }
     }
 
@@ -3416,26 +3580,7 @@ export class Game {
 
         if (this.hasLevelUpAbility) this._drawExpBar(ctx, barX, barY + 8, barW);
 
-        // Combo meter: fills with consecutive hits, taps at 10/25/50 for damage
-        // tier bumps (5/10/15% mult from Player.comboDamageMult).
-        if (this.hasLevelUpAbility && this.player.comboCount >= 3) {
-            const comboY = barY + (this.hasLevelUpAbility ? 14 : 8);
-            const combo = Math.min(50, this.player.comboCount);
-            const ratio = combo / 50;
-            const decay = Math.max(0, Math.min(1, this.player.comboTimer / 2.5));
-            const tier = combo >= 50 ? 3 : combo >= 25 ? 2 : combo >= 10 ? 1 : 0;
-            const colors = ['#ffe78a', '#ffb45a', '#ff6ec7', '#8fdfff'];
-            ctx.fillStyle = '#130f1b';
-            ctx.fillRect(barX, comboY, barW, 3);
-            ctx.fillStyle = colors[tier];
-            ctx.fillRect(barX + 1, comboY + 1, Math.max(0, (barW - 2) * ratio), 1);
-            if (decay < 1) {
-                ctx.fillStyle = 'rgba(255,255,255,0.15)';
-                ctx.fillRect(barX + 1 + Math.round((barW - 2) * ratio), comboY + 1, 1, 1);
-            }
-            const comboText = tier > 0 ? `X${combo}` : `${combo}`;
-            font.draw(ctx, comboText, barX + barW + 3, comboY - 3, { color: colors[tier] });
-        }
+        // Combo meter is now drawn as a big centered widget — see _drawComboMeter.
 
         // Cooldown pips: attack on the left, dash on the right.
         const pipY = 6 + panelH - 9;
@@ -3477,6 +3622,8 @@ export class Game {
         if (this.bossState === 'fighting' && this.sandwormBoss) {
             this._drawBossHpBar(ctx);
         }
+
+        if (this.player.comboCount >= 3) this._drawComboMeter(ctx);
 
         // Hide the bottom hint when any other bottom-of-screen element could overlap it:
         // the enemy nameplate (bottom-right) or an interact prompt (y = NATIVE_HEIGHT - 40).

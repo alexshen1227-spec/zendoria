@@ -297,6 +297,9 @@ export class Player {
         // Combat flow trackers (combo, amberwake cleave counter, kill-haste buff).
         this.comboCount = 0;
         this.comboTimer = 0;
+        this.comboPulse = 0;
+        this.comboTier = 0;
+        this.comboTierPulse = 0;
         this.swingCount = 0;
         this.pendingAmberwakeCleave = false;
         this.killHasteTimer = 0;
@@ -397,8 +400,13 @@ export class Player {
         // Combo decay: any gap longer than 2.5s after a hit resets the streak.
         if (this.comboTimer > 0) {
             this.comboTimer = Math.max(0, this.comboTimer - dt);
-            if (this.comboTimer === 0) this.comboCount = 0;
+            if (this.comboTimer === 0) {
+                this.comboCount = 0;
+                this.comboTier = 0;
+            }
         }
+        if (this.comboPulse > 0) this.comboPulse = Math.max(0, this.comboPulse - dt * 5);
+        if (this.comboTierPulse > 0) this.comboTierPulse = Math.max(0, this.comboTierPulse - dt * 1.6);
 
         if (this.killHasteTimer > 0) this.killHasteTimer = Math.max(0, this.killHasteTimer - dt);
 
@@ -594,6 +602,7 @@ export class Player {
             // Reset combo when rescued.
             this.comboCount = 0;
             this.comboTimer = 0;
+            this.comboTier = 0;
             return true;
         }
 
@@ -653,9 +662,20 @@ export class Player {
     }
 
     // Called by game.js on every registered hit. Extends combo streak for 2.5s.
+    // Returns the tier that was newly reached, or -1 if no tier change.
     registerComboHit() {
+        const prevTier = this.comboTier;
         this.comboCount = Math.min(99, (this.comboCount || 0) + 1);
         this.comboTimer = 2.5;
+        this.comboPulse = 1;
+        const c = this.comboCount;
+        const newTier = c >= 50 ? 3 : c >= 25 ? 2 : c >= 10 ? 1 : 0;
+        this.comboTier = newTier;
+        if (newTier > prevTier) {
+            this.comboTierPulse = 1;
+            return newTier;
+        }
+        return -1;
     }
 
     comboDamageMult() {
@@ -664,6 +684,16 @@ export class Player {
         if (c >= 25) return 1.10;
         if (c >= 10) return 1.05;
         return 1;
+    }
+
+    comboXpMult() {
+        // Scales XP gained with current combo so long streaks feel rewarding.
+        switch (this.comboTier) {
+            case 3: return 1.6;
+            case 2: return 1.35;
+            case 1: return 1.15;
+            default: return 1;
+        }
     }
 
     // Called when an enemy is slain. Triggers amber echo haste if unlocked.

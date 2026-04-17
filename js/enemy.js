@@ -336,11 +336,17 @@ export class Enemy {
         this.homeX = x;
         this.homeY = y;
 
-        this.health = config.maxHealth;
-        this.maxHealth = config.maxHealth;
-        this.xpReward = config.xpReward ?? 1;
-        this.hudLabel = config.hudLabel;
-        this.toastLabel = config.toastLabel;
+        // Rare "golden" variant: ~7% chance on regular mobs. Gets extra HP, triple XP,
+        // and a visible golden aura to telegraph the reward.
+        this.isGolden = config.xpReward && config.xpReward < 50 && Math.random() < 0.07;
+        const goldMult = this.isGolden ? 2 : 1;
+        const goldXp = this.isGolden ? 3 : 1;
+
+        this.health = config.maxHealth * goldMult;
+        this.maxHealth = config.maxHealth * goldMult;
+        this.xpReward = (config.xpReward ?? 1) * goldXp;
+        this.hudLabel = this.isGolden ? `AMBER ${config.hudLabel || ''}`.trim() : config.hudLabel;
+        this.toastLabel = this.isGolden ? `AMBER ${config.toastLabel || ''}`.trim() : config.toastLabel;
 
         this.state = 'idle';
         this.stateTimer = chooseDuration(config.idleDuration);
@@ -519,6 +525,31 @@ export class Enemy {
 
         if (!this.sheet) return;
 
+        // Golden variant: pulsing amber halo behind the sprite.
+        if (this.isGolden && alpha > 0.4) {
+            const t = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 240;
+            const pulse = Math.sin(t) * 0.5 + 0.5;
+            const auraR = Math.max(12, this.w * 0.55);
+            const grad = ctx.createRadialGradient(
+                this.x + this.w / 2,
+                this.y + this.h / 2,
+                2,
+                this.x + this.w / 2,
+                this.y + this.h / 2,
+                auraR,
+            );
+            grad.addColorStop(0, `rgba(255, 223, 138, ${0.28 + pulse * 0.22})`);
+            grad.addColorStop(0.55, `rgba(255, 180, 60, ${0.14 + pulse * 0.12})`);
+            grad.addColorStop(1, 'rgba(255, 180, 60, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(
+                Math.round(this.x + this.w / 2 - auraR),
+                Math.round(this.y + this.h / 2 - auraR),
+                Math.round(auraR * 2),
+                Math.round(auraR * 2),
+            );
+        }
+
         this.sheet.drawFrame(
             ctx,
             frameCoords.col,
@@ -532,6 +563,26 @@ export class Enemy {
                 originY: this.h / 2,
             },
         );
+
+        // Golden tint overlay: warm additive pass so the sprite reads as gilded.
+        if (this.isGolden && alpha > 0.4) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.22;
+            this.sheet.drawFrame(
+                ctx,
+                frameCoords.col,
+                frameCoords.row,
+                this.x + jitterX,
+                this.y + jitterY,
+                {
+                    flipX: this.facingLeft,
+                    originX: this.w / 2,
+                    originY: this.h / 2,
+                },
+            );
+            ctx.restore();
+        }
 
         // White hit-flash: re-draw the sprite with 'lighter' (additive) blend
         // so only its own opaque pixels brighten — shadow/ground stay clean.
