@@ -363,6 +363,8 @@ export class Game {
         this.particles = [];
         this.projectiles = [];
         this.swingFx = [];
+        this.damageNumbers = [];
+        this.lowHealthPulse = 0;
         this.hitStopTimer = 0;
         this.levelUpAnim = null;
         this.levelUpFlash = 0;
@@ -528,7 +530,7 @@ export class Game {
         }
 
         this._refreshEntityColliders();
-        this.camera.follow(this.player, this.world.pixelW, this.world.pixelH);
+        this.camera.snap(this.player, this.world.pixelW, this.world.pixelH);
     }
 
     _switchRealm(targetRealmId, arrivalKey) {
@@ -1082,7 +1084,7 @@ export class Game {
         this.toastTimer = 0;
         this.objectiveTimer = 0;
 
-        this.camera.follow(this.player, this.world.pixelW, this.world.pixelH);
+        this.camera.snap(this.player, this.world.pixelW, this.world.pixelH);
     }
 
     _update(dt) {
@@ -1164,7 +1166,12 @@ export class Game {
         }
 
         for (const enemy of this.enemies) {
+            const playerHpBefore = this.player.health;
             enemy.update(dt, this.player, this.world);
+            const damageTaken = playerHpBefore - this.player.health;
+            if (damageTaken > 0) {
+                this._spawnDamageNumber(this.player.cx, this.player.y - 2, damageTaken, { variant: 'player' });
+            }
             // Harvest archer arrows
             if (typeof enemy.consumeProjectile === 'function') {
                 const proj = enemy.consumeProjectile();
@@ -1200,7 +1207,19 @@ export class Game {
         this._updateNpcInteraction();
         this._updateHudInput();
         this._updateParticles(dt);
-        this.camera.follow(this.player, this.world.pixelW, this.world.pixelH);
+        this._updateDamageNumbers(dt);
+
+        // Low-health pulse: fades in below 30% HP, pulses with sine, fades out above.
+        const hpFrac = this.player.maxHealth > 0 ? this.player.health / this.player.maxHealth : 1;
+        if (this.player.health > 0 && hpFrac <= 0.3) {
+            const target = 0.5 + 0.5 * Math.sin(this.gameTime * 5.5);
+            const severity = 1 - hpFrac / 0.3;
+            this.lowHealthPulse += ((0.35 + 0.65 * target) * (0.5 + severity * 0.5) - this.lowHealthPulse) * Math.min(1, dt * 6);
+        } else {
+            this.lowHealthPulse = Math.max(0, this.lowHealthPulse - dt * 2.5);
+        }
+
+        this.camera.follow(this.player, this.world.pixelW, this.world.pixelH, dt);
 
         if (this.player.health <= 0 && !this.deathState) {
             this._triggerDeath();
@@ -1533,6 +1552,9 @@ export class Game {
                     size: 2,
                 });
                 this.hitStopTimer = Math.max(this.hitStopTimer, 0.035);
+                this._spawnDamageNumber(hitX, hitY - 4, this.player.attackDamage, {
+                    crit: slain && this.player.attackDamage > 1,
+                });
 
                 if (slain) {
                     this._spawnParticles(hitX, hitY, {
@@ -1655,10 +1677,13 @@ export class Game {
                 p.x + arrowR >= playerHb.x && p.x - arrowR <= playerHb.x + playerHb.w &&
                 p.y + arrowR >= playerHb.y && p.y - arrowR <= playerHb.y + playerHb.h
             ) {
-                this.player.takeDamage(p.damage, {
+                const landed = this.player.takeDamage(p.damage, {
                     x: Math.cos(p.angle) * 18,
                     y: Math.sin(p.angle) * 14,
                 });
+                if (landed) {
+                    this._spawnDamageNumber(this.player.cx, this.player.y - 2, p.damage, { variant: 'player' });
+                }
                 this._spawnParticles(p.x, p.y, {
                     count: 6,
                     spread: Math.PI * 2,
@@ -1747,6 +1772,76 @@ export class Game {
             ctx.stroke();
             ctx.restore();
         }
+    }
+
+    _spawnDamageNumber(x, y, amount, opts = {}) {
+        if (!amount || amount <= 0) return;
+        const variant = opts.variant || 'enemy';
+        const crit = !!opts.crit;
+        // Slight horizontal jitter so stacked hits don't perfectly overlap.
+        const jx = (Math.random() - 0.5) * 6;
+        this.damageNumbers.push({
+            x: x + jx,
+            y: y - 2,
+            vy: -42 - Math.random() * 14,
+            vx: jx * 1.4,
+            text: crit ? `${amount}!` : `${amount}`,
+            variant,
+            crit,
+            timer: 0.7,
+            maxTimer: 0.7,
+            scale: crit ? 2 : 1,
+        });
+    }
+
+    _updateDamageNumbers(dt) {
+        if (!this.damageNumbers || this.damageNumbers.length === 0) return;
+        for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+            const d = this.damageNumbers[i];
+            d.x += d.vx * dt;
+            d.y += d.vy * dt;
+            d.vy += 110 * dt;
+            d.vx *= Math.pow(0.86, dt * 60);
+            d.timer -= dt;
+            if (d.timer <= 0) this.damageNumbers.splice(i, 1);
+        }
+    }
+
+    _drawDamageNumbers(ctx) {
+        if (!this.damageNumbers || this.damageNumbers.length === 0) return;
+        const font = this.assets.pixelFont;
+        for (const d of this.damageNumbers) {
+            const t = 1 - d.timer / d.maxTimer;
+            const alpha = d.timer > 0.18 ? 1 : Math.max(0, d.timer / 0.18);
+            const popScale = t < 0.18 ? d.scale * (0.6 + (t / 0.18) * 0.4) : d.scale;
+            const color = d.variant === 'player'
+                ? '#ff6b6b'
+                : d.crit ? '#ffec80' : '#ffffff';
+            const w = font.measure(d.text, popScale);
+            const xOff = Math.round(d.x - w / 2);
+            const yOff = Math.round(d.y);
+            font.draw(ctx, d.text, xOff + 1, yOff + 1, { color: 'rgba(5, 8, 15, 0.85)', alpha, scale: popScale });
+            font.draw(ctx, d.text, xOff, yOff, { color, alpha, scale: popScale });
+        }
+    }
+
+    _drawLowHealthVignette(ctx) {
+        if (this.lowHealthPulse <= 0) return;
+        const intensity = this.lowHealthPulse;
+        ctx.save();
+        const grad = ctx.createRadialGradient(
+            NATIVE_WIDTH / 2,
+            NATIVE_HEIGHT / 2,
+            Math.min(NATIVE_WIDTH, NATIVE_HEIGHT) * 0.22,
+            NATIVE_WIDTH / 2,
+            NATIVE_HEIGHT / 2,
+            Math.max(NATIVE_WIDTH, NATIVE_HEIGHT) * 0.62,
+        );
+        grad.addColorStop(0, 'rgba(180, 30, 30, 0)');
+        grad.addColorStop(1, `rgba(180, 30, 30, ${0.55 * intensity})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+        ctx.restore();
     }
 
     _updateParticles(dt) {
@@ -1963,8 +2058,10 @@ export class Game {
         this._drawSwingFx(ctx);
         this._drawParticles(ctx);
         this._drawXpPopups(ctx);
+        this._drawDamageNumbers(ctx);
         this.camera.end(ctx);
 
+        if (this.started) this._drawLowHealthVignette(ctx);
         if (this.started) this._drawHUD(ctx);
         if (this.started && this.levelUpFlash > 0) {
             ctx.fillStyle = `rgba(255, 244, 184, ${this.levelUpFlash * 0.55})`;
@@ -2761,6 +2858,31 @@ export class Game {
         font.draw(ctx, text, x + 6, y + 2, { color: '#ffe78a' });
     }
 
+    _drawCooldownPip(ctx, x, y, label, fill, color) {
+        const w = 38;
+        const h = 6;
+        const f = Math.max(0, Math.min(1, fill));
+        const ready = f >= 1;
+        const font = this.assets.pixelFont;
+        font.draw(ctx, label, x, y - 7, { color: ready ? color : '#75809a' });
+        ctx.fillStyle = '#0c0f17';
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = ready ? color : '#3a3142';
+        ctx.fillRect(x + 1, y + 1, Math.max(0, (w - 2) * f), h - 2);
+        if (ready) {
+            const pulse = 0.4 + 0.6 * (Math.sin(this.gameTime * 7) * 0.5 + 0.5);
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = 0.35 + pulse * 0.4;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+            ctx.globalAlpha = 1;
+        } else {
+            ctx.strokeStyle = '#1d2230';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        }
+    }
+
     _drawXpPopups(ctx) {
         if (!this.xpPopups || this.xpPopups.length === 0) return;
         const font = this.assets.pixelFont;
@@ -2867,8 +2989,8 @@ export class Game {
         const biomeInfo = this.world.getBiomeInfoAtWorld(this.player.cx, this.player.cy);
         const regionLabel = biomeInfo.hudLabel || this.world.realmLabel;
 
-        // Left panel: title + sword icon on right side, HP below
-        const panelH = this.hasLevelUpAbility ? 46 : 36;
+        // Left panel: title + sword icon on right side, HP below, cooldown pips at bottom
+        const panelH = this.hasLevelUpAbility ? 54 : 44;
         ctx.fillStyle = 'rgba(7, 11, 19, 0.82)';
         ctx.fillRect(6, 6, 104, panelH);
         font.draw(ctx, regionLabel, 12, 10, { color: biomeInfo.accent || '#98ffe0' });
@@ -2885,6 +3007,15 @@ export class Game {
         font.draw(ctx, 'HP', 93, 29, { color: '#fff6d3' });
 
         if (this.hasLevelUpAbility) this._drawExpBar(ctx, barX, barY + 8, barW);
+
+        // Cooldown pips: attack on the left, dash on the right.
+        const pipY = 6 + panelH - 9;
+        this._drawCooldownPip(ctx, 12, pipY, 'ATK',
+            1 - (this.player.attackCooldownTimer / Math.max(0.0001, this.player.attackCooldown)),
+            '#ffd773');
+        this._drawCooldownPip(ctx, 56, pipY, 'DSH',
+            1 - (this.player.dashCooldownTimer / Math.max(0.0001, this.player.dashCooldown)),
+            '#8effec');
 
         const objectiveLines = this._wrapPixelText(this._currentObjectiveText(), 122);
         const actionRows = ['ESC MENU'];

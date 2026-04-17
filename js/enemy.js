@@ -487,6 +487,28 @@ export class Enemy {
                 originY: this.h / 2,
             },
         );
+
+        // White hit-flash: re-draw the sprite with 'lighter' (additive) blend
+        // so only its own opaque pixels brighten — shadow/ground stay clean.
+        if (this.flashTimer > 0) {
+            const t = Math.max(0, Math.min(1, this.flashTimer / 0.18));
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.55 * t;
+            this.sheet.drawFrame(
+                ctx,
+                frameCoords.col,
+                frameCoords.row,
+                this.x + jitterX,
+                this.y + jitterY,
+                {
+                    flipX: this.facingLeft,
+                    originX: this.w / 2,
+                    originY: this.h / 2,
+                },
+            );
+            ctx.restore();
+        }
     }
 
     _currentFrame() {
