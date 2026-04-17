@@ -304,7 +304,27 @@ export class Player {
         this.pendingAmberwakeCleave = false;
         this.killHasteTimer = 0;
 
+        // Shrine buff timers (granted by BuffShrine entities). Each decays to 0
+        // and then re-runs applySkillEffects so stat multipliers revert cleanly.
+        this.buffMightTimer = 0;
+        this.buffSwiftTimer = 0;
+        this.buffWardTimer = 0;
+
         this.applySkillEffects({ heal: false });
+    }
+
+    grantShrineBuff(kind, duration = 25) {
+        if (kind === 'might') this.buffMightTimer = Math.max(this.buffMightTimer, duration);
+        else if (kind === 'swift') this.buffSwiftTimer = Math.max(this.buffSwiftTimer, duration);
+        else if (kind === 'ward') this.buffWardTimer = Math.max(this.buffWardTimer, duration);
+        this.applySkillEffects({ heal: false });
+    }
+
+    hasBuff(kind) {
+        if (kind === 'might') return this.buffMightTimer > 0;
+        if (kind === 'swift') return this.buffSwiftTimer > 0;
+        if (kind === 'ward') return this.buffWardTimer > 0;
+        return false;
     }
 
     applySkillEffects({ heal = false } = {}) {
@@ -316,8 +336,10 @@ export class Player {
         this.health = Math.max(0, Math.min(this.maxHealth, this.health));
         if (heal) this.health = this.maxHealth;
 
-        this.attackDamage = this.baseAttackDamage + b.attackDamageBonus;
-        this.speed = this.baseSpeed * b.speedMult;
+        const mightBonus = this.buffMightTimer > 0 ? 1 : 0;
+        const swiftMult = this.buffSwiftTimer > 0 ? 1.25 : 1;
+        this.attackDamage = Math.max(1, this.baseAttackDamage + b.attackDamageBonus + mightBonus);
+        this.speed = this.baseSpeed * b.speedMult * swiftMult;
         this.attackCooldown = this.baseAttackCooldown * b.cooldownMult;
         this.xpMultiplier = b.xpMult;
         this.regenPerSec = b.regenPerSec;
@@ -409,6 +431,21 @@ export class Player {
         if (this.comboTierPulse > 0) this.comboTierPulse = Math.max(0, this.comboTierPulse - dt * 1.6);
 
         if (this.killHasteTimer > 0) this.killHasteTimer = Math.max(0, this.killHasteTimer - dt);
+
+        // Shrine buffs: tick down and recompute stats the instant a buff expires.
+        let buffExpired = false;
+        if (this.buffMightTimer > 0) {
+            this.buffMightTimer = Math.max(0, this.buffMightTimer - dt);
+            if (this.buffMightTimer === 0) buffExpired = true;
+        }
+        if (this.buffSwiftTimer > 0) {
+            this.buffSwiftTimer = Math.max(0, this.buffSwiftTimer - dt);
+            if (this.buffSwiftTimer === 0) buffExpired = true;
+        }
+        if (this.buffWardTimer > 0) {
+            this.buffWardTimer = Math.max(0, this.buffWardTimer - dt);
+        }
+        if (buffExpired) this.applySkillEffects({ heal: false });
 
         if (this.wormHeartCooldown > 0) {
             this.wormHeartCooldown = Math.max(0, this.wormHeartCooldown - dt);
@@ -607,7 +644,7 @@ export class Player {
         }
 
         this.health = Math.max(0, this.health - taken);
-        this.invulnTimer = 1.0;
+        this.invulnTimer = this.buffWardTimer > 0 ? 1.4 : 1.0;
         this.damagePush = {
             x: knockback.x,
             y: knockback.y,

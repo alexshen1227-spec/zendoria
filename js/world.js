@@ -132,8 +132,29 @@ export class World {
         ];
 
         this.enemySpawnNodes = [
-            { kind: 'blightworm', x: 47 * TILE + 8, y: 22 * TILE + 8, interval: 16, maxAlive: 2, leashRadius: 66, activationRadius: 220 },
-            { kind: 'blightworm', x: 62 * TILE + 8, y: 38 * TILE + 8, interval: 15, maxAlive: 2, leashRadius: 66, activationRadius: 220 },
+            { kind: 'blightworm', x: 47 * TILE + 8, y: 22 * TILE + 8, interval: 11, maxAlive: 3, leashRadius: 80, activationRadius: 260 },
+            { kind: 'blightworm', x: 62 * TILE + 8, y: 38 * TILE + 8, interval: 10, maxAlive: 3, leashRadius: 80, activationRadius: 260 },
+            { kind: 'blightworm', x: 36 * TILE + 8, y: 18 * TILE + 8, interval: 12, maxAlive: 2, leashRadius: 72, activationRadius: 240 },
+            { kind: 'blightworm', x: 52 * TILE + 8, y: 46 * TILE + 8, interval: 12, maxAlive: 2, leashRadius: 72, activationRadius: 240 },
+        ];
+
+        this.loreStoneSpawns = [
+            { id: 'lore-driftmere-01', x: 18 * TILE + 8, y: 28 * TILE + 14, title: 'WEATHERED STELE', body: 'FIRST KEEPERS LIT THE DRIFT LANTERNS HERE. THE ISLE REMEMBERS EVERY LOSS.' },
+            { id: 'lore-driftmere-02', x: 36 * TILE + 8, y: 17 * TILE + 14, title: 'MOSSY STONE', body: 'ELARA WAS BORN BENEATH STARFALL SKY. SHE SAW THE AMBERWAKE RISE AS A CHILD.' },
+            { id: 'lore-driftmere-03', x: 51 * TILE + 8, y: 19 * TILE + 14, title: 'CRACKED RUNE', body: 'WHERE THE SEA MEETS THE SAND, OLD MAGIC STILL WALKS. TREAD QUIET OR BE SEEN.' },
+            { id: 'lore-driftmere-04', x: 72 * TILE + 8, y: 24 * TILE + 14, title: 'WORN MARKER', body: 'THE SANDWORM WAS ONCE A GUARDIAN. NOW IT HUNGERS FOR THE LIGHT IT LOST.' },
+            { id: 'lore-driftmere-05', x: 50 * TILE + 8, y: 46 * TILE + 14, title: 'SALT-BLEACHED SHARD', body: 'A PILGRIM FELL HERE. THEIR BLADE BECAME YOUR INHERITANCE.' },
+        ];
+
+        this.shrineSpawns = [
+            { id: 'shrine-driftmere-might', kind: 'might', x: 28 * TILE + 8, y: 30 * TILE + 14 },
+            { id: 'shrine-driftmere-swift', kind: 'swift', x: 58 * TILE + 8, y: 34 * TILE + 14 },
+        ];
+
+        this.crystalSpawns = [
+            { id: 'crystal-drift-01', kind: 'tidestone', x: 14 * TILE + 8, y: 22 * TILE + 14 },
+            { id: 'crystal-drift-02', kind: 'tidestone', x: 69 * TILE + 8, y: 41 * TILE + 14 },
+            { id: 'crystal-drift-03', kind: 'tidestone', x: 17 * TILE + 8, y: 41 * TILE + 14 },
         ];
 
         this.mapMarkers = [
@@ -247,21 +268,48 @@ export class World {
         ];
 
         this.enemySpawnNodes = [
-            // Original
-            { kind: 'sunscarab', x: 30 * TILE + 8, y: 58 * TILE + 8, interval: 14, maxAlive: 3, leashRadius: 72, activationRadius: 260 },
-            { kind: 'duneWarden', x: 94 * TILE + 8, y: 22 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 80, activationRadius: 260 },
-            { kind: 'blightworm', x: 82 * TILE + 8, y: 63 * TILE + 8, interval: 13, maxAlive: 3, leashRadius: 78, activationRadius: 260 },
+            // Original — tightened for livelier desert traffic
+            { kind: 'sunscarab', x: 30 * TILE + 8, y: 58 * TILE + 8, interval: 10, maxAlive: 3, leashRadius: 80, activationRadius: 280 },
+            { kind: 'duneWarden', x: 94 * TILE + 8, y: 22 * TILE + 8, interval: 14, maxAlive: 2, leashRadius: 86, activationRadius: 280 },
+            { kind: 'blightworm', x: 82 * TILE + 8, y: 63 * TILE + 8, interval: 10, maxAlive: 3, leashRadius: 82, activationRadius: 280 },
+            { kind: 'sunscarab', x: 68 * TILE + 8, y: 44 * TILE + 8, interval: 11, maxAlive: 3, leashRadius: 84, activationRadius: 280 },
+            { kind: 'duneWarden', x: 58 * TILE + 8, y: 36 * TILE + 8, interval: 15, maxAlive: 2, leashRadius: 80, activationRadius: 260 },
 
             // Rusher swarms in the canyons — fast, low HP, frequent
-            { kind: 'rusher', x: 86 * TILE + 8, y: 20 * TILE + 8, interval: 8, maxAlive: 4, leashRadius: 90, activationRadius: 260 },
-            { kind: 'rusher', x: 96 * TILE + 8, y: 18 * TILE + 8, interval: 9, maxAlive: 3, leashRadius: 90, activationRadius: 260 },
+            { kind: 'rusher', x: 86 * TILE + 8, y: 20 * TILE + 8, interval: 7, maxAlive: 4, leashRadius: 96, activationRadius: 280 },
+            { kind: 'rusher', x: 96 * TILE + 8, y: 18 * TILE + 8, interval: 7, maxAlive: 4, leashRadius: 96, activationRadius: 280 },
+            { kind: 'rusher', x: 78 * TILE + 8, y: 22 * TILE + 8, interval: 9, maxAlive: 3, leashRadius: 90, activationRadius: 260 },
 
             // Archer pickets in the salt flats
-            { kind: 'tacticalArcher', x: 25 * TILE + 8, y: 52 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 100, activationRadius: 320 },
-            { kind: 'tacticalArcher', x: 32 * TILE + 8, y: 60 * TILE + 8, interval: 20, maxAlive: 2, leashRadius: 100, activationRadius: 320 },
+            { kind: 'tacticalArcher', x: 25 * TILE + 8, y: 52 * TILE + 8, interval: 15, maxAlive: 2, leashRadius: 108, activationRadius: 320 },
+            { kind: 'tacticalArcher', x: 32 * TILE + 8, y: 60 * TILE + 8, interval: 16, maxAlive: 2, leashRadius: 108, activationRadius: 320 },
+            { kind: 'tacticalArcher', x: 20 * TILE + 8, y: 45 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 104, activationRadius: 320 },
 
             // Goliath in the tropics ruins (rare, slow respawn)
-            { kind: 'goliath', x: 72 * TILE + 8, y: 66 * TILE + 8, interval: 45, maxAlive: 1, leashRadius: 120, activationRadius: 280 },
+            { kind: 'goliath', x: 72 * TILE + 8, y: 66 * TILE + 8, interval: 40, maxAlive: 1, leashRadius: 120, activationRadius: 280 },
+        ];
+
+        this.loreStoneSpawns = [
+            { id: 'lore-frontier-01', x: 78 * TILE + 8, y: 45 * TILE + 14, title: 'DUSTWAKE MARKER', body: 'THE FRONTIER WAS FARMLAND ONCE. THE AMBERWAKE SWALLOWED IT IN A SINGLE DUSK.' },
+            { id: 'lore-frontier-02', x: 90 * TILE + 8, y: 19 * TILE + 14, title: 'RUST-ROCK OBELISK', body: 'CANYONS WERE CARVED BY A RIVER THAT REFUSED TO DIE. IT STILL WHISPERS AT NIGHT.' },
+            { id: 'lore-frontier-03', x: 28 * TILE + 8, y: 56 * TILE + 14, title: 'SALT-ETCHED PLINTH', body: 'CROSS THE FLATS IN SILENCE. THE CRYSTALS LISTEN FOR FOOTSTEPS.' },
+            { id: 'lore-frontier-04', x: 66 * TILE + 8, y: 68 * TILE + 14, title: 'SUNKEN RELIQUARY', body: 'THE TROPICS WERE A CITADEL. NOW ITS GUARDIANS STAND AS GOLEMS IN GREEN WATER.' },
+            { id: 'lore-frontier-05', x: 50 * TILE + 8, y: 50 * TILE + 14, title: 'CROSSROADS STELE', body: 'FOUR WINDS MEET HERE. EACH CARRIES A DIFFERENT END.' },
+            { id: 'lore-frontier-06', x: 101 * TILE + 8, y: 34 * TILE + 14, title: 'DUNE-BLED CAIRN', body: 'A SCOUT DIED MAPPING THIS ROUTE. HIS COMPASS STILL POINTS TRUE.' },
+        ];
+
+        this.shrineSpawns = [
+            { id: 'shrine-frontier-might', kind: 'might', x: 60 * TILE + 8, y: 30 * TILE + 14 },
+            { id: 'shrine-frontier-swift', kind: 'swift', x: 36 * TILE + 8, y: 54 * TILE + 14 },
+            { id: 'shrine-frontier-ward', kind: 'ward', x: 75 * TILE + 8, y: 60 * TILE + 14 },
+        ];
+
+        this.crystalSpawns = [
+            { id: 'crystal-front-01', kind: 'salt', x: 22 * TILE + 8, y: 58 * TILE + 14 },
+            { id: 'crystal-front-02', kind: 'salt', x: 30 * TILE + 8, y: 42 * TILE + 14 },
+            { id: 'crystal-front-03', kind: 'amber', x: 55 * TILE + 8, y: 42 * TILE + 14 },
+            { id: 'crystal-front-04', kind: 'amber', x: 77 * TILE + 8, y: 52 * TILE + 14 },
+            { id: 'crystal-front-05', kind: 'rust', x: 92 * TILE + 8, y: 26 * TILE + 14 },
         ];
 
         this.mapMarkers = [

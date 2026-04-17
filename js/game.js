@@ -9,6 +9,7 @@ import { Tombstone } from './tombstone.js?v=20260414-tombstone-anim';
 import { Portal } from './portal.js?v=20260414-desert-enemies';
 import { TreasureChest } from './treasureChest.js?v=20260415-level-up-chest';
 import { Pillar } from './pillar.js?v=20260416-pillars-boss';
+import { LoreStone, BuffShrine, CrystalCluster } from './exploration.js?v=20260416-openworld';
 import {
     MAX_PLAYER_LEVEL,
     SKILLS,
@@ -342,6 +343,10 @@ export class Game {
         this.tombstone = null;
         this.treasureChest = null;
         this.pillars = [];
+        this.loreStones = [];
+        this.shrines = [];
+        this.crystals = [];
+        this.activeLoreReadout = null;
         this.sandwormBoss = null;
         this.bossState = 'none';
         this.bossTriggerTimer = 0;
@@ -406,6 +411,12 @@ export class Game {
                 const c = pillar.getCollider();
                 if (c) colliders.push(c);
             }
+        }
+        for (const stone of this.loreStones) colliders.push(stone.getCollider());
+        for (const shrine of this.shrines) colliders.push(shrine.getCollider());
+        for (const crystal of this.crystals) {
+            const c = crystal.getCollider();
+            if (c) colliders.push(c);
         }
         if (this.portals) {
             for (const portal of this.portals) {
@@ -630,6 +641,9 @@ export class Game {
             enemies: this._serializeEnemies(),
             enemySpawnNodes: this._serializeSpawnNodes(),
             pillars: (this.pillars || []).map((p) => p.stage),
+            loreRead: (this.loreStones || []).map((s) => s.read),
+            crystalsDestroyed: (this.crystals || []).map((c) => c.destroyed),
+            shrineCooldowns: (this.shrines || []).map((s) => s.cooldown),
         };
     }
 
@@ -684,6 +698,26 @@ export class Game {
             const savedStage = Array.isArray(savedPillars) ? (savedPillars[index] || 0) : 0;
             return new Pillar(def, this.assets.pillarSheet, savedStage);
         });
+
+        const savedLoreRead = savedRealmState?.loreRead;
+        const savedCrystalsDestroyed = savedRealmState?.crystalsDestroyed;
+        const savedShrineCooldowns = savedRealmState?.shrineCooldowns;
+        this.loreStones = (this.world.loreStoneSpawns || []).map((def, index) => {
+            const stone = new LoreStone(def);
+            if (Array.isArray(savedLoreRead) && savedLoreRead[index]) stone.setRead(true);
+            return stone;
+        });
+        this.shrines = (this.world.shrineSpawns || []).map((def, index) => {
+            const shrine = new BuffShrine(def);
+            const saved = Array.isArray(savedShrineCooldowns) ? savedShrineCooldowns[index] : 0;
+            if (saved > 0) shrine.cooldown = saved;
+            return shrine;
+        });
+        this.crystals = (this.world.crystalSpawns || []).map((def, index) => {
+            const wasDestroyed = Array.isArray(savedCrystalsDestroyed) ? savedCrystalsDestroyed[index] : false;
+            return new CrystalCluster(def, wasDestroyed);
+        });
+        this.activeLoreReadout = null;
 
         this.enemies = this._createEnemies(savedEnemies ?? null);
         if (Array.isArray(savedSpawnNodes) && savedSpawnNodes.length === this.world.enemySpawnNodes.length) {
@@ -1267,6 +1301,9 @@ export class Game {
         for (const portal of this.portals) portal.update(dt);
         if (this.treasureChest) this.treasureChest.update(dt);
         for (const pillar of this.pillars) pillar.update(dt);
+        for (const stone of this.loreStones) stone.update(dt);
+        for (const shrine of this.shrines) shrine.update(dt);
+        for (const crystal of this.crystals) crystal.update(dt);
 
         // Dialog / reward popup freezes the world
         if (this.rewardPopup) {
@@ -1460,10 +1497,75 @@ export class Game {
             return;
         }
 
+        const nearShrine = this._getNearbyShrine();
+        if (nearShrine && this.input.wasPressed('KeyE')) {
+            this._activateShrine(nearShrine);
+            return;
+        }
+
+        const nearLore = this._getNearbyLoreStone();
+        if (nearLore && this.input.wasPressed('KeyE')) {
+            this._activateLoreStone(nearLore);
+            return;
+        }
+
         const portal = this._getNearbyPortal();
         if (portal && this.input.wasPressed('KeyE')) {
             this._activatePortal(portal);
         }
+    }
+
+    _getNearbyShrine() {
+        const hitbox = this.player.getHitbox();
+        return this.shrines.find((s) => rectsOverlap(hitbox, s.getInteractRect())) || null;
+    }
+
+    _getNearbyLoreStone() {
+        const hitbox = this.player.getHitbox();
+        return this.loreStones.find((s) => rectsOverlap(hitbox, s.getInteractRect())) || null;
+    }
+
+    _activateShrine(shrine) {
+        if (!shrine.ready) {
+            const secs = Math.ceil(shrine.cooldown);
+            this.toast = `SHRINE RECHARGING · ${secs}S`;
+            this.toastTimer = 1.6;
+            this._playBeep(280, 0.1, 'square', 0.08);
+            return;
+        }
+        if (!shrine.activate()) return;
+        this.player.grantShrineBuff(shrine.buffId, shrine.duration);
+        this.toast = `${shrine.buff} · ${shrine.duration}S`;
+        this.toastTimer = 2.2;
+        this._playBeep(840, 0.1, 'triangle', 0.14);
+        this._playBeep(1120, 0.14, 'sine', 0.1);
+        this._spawnParticles(shrine.cx, shrine.cy - 4, {
+            count: 14,
+            spread: Math.PI * 2,
+            minSpeed: 28,
+            maxSpeed: 90,
+            friction: 0.9,
+            gravity: -12,
+            life: 0.7,
+            colors: [shrine.color, '#ffffff', '#fff7c8'],
+            size: 2,
+        });
+    }
+
+    _activateLoreStone(stone) {
+        if (!stone.read) {
+            stone.setRead(true);
+            if (this.hasLevelUpAbility) this._awardXp(15, stone.cx, stone.cy - 10);
+            this._playBeep(680, 0.1, 'triangle', 0.12);
+            this._playBeep(980, 0.16, 'sine', 0.09);
+        } else {
+            this._playBeep(520, 0.06, 'square', 0.08);
+        }
+        this.activeLoreReadout = {
+            title: stone.title,
+            body: stone.body,
+            timer: 5.0,
+        };
     }
 
     _updateHudInput() {
@@ -1766,6 +1868,40 @@ export class Game {
                 }
             } else {
                 this._playBeep(380, 0.08, 'square', 0.08);
+            }
+        }
+
+        // Crystal clusters: chip and shatter on overlap — each shatter drops XP + sparks.
+        for (const crystal of this.crystals) {
+            if (crystal.destroyed || !this.player.canHitEnemy(`crystal-${crystal.id}`)) continue;
+            const interact = crystal.getInteractRect();
+            if (!interact || !rectsOverlap(attackRect, interact)) continue;
+
+            const result = crystal.takeHit(this.player.attackDamage || 1);
+            if (!result.landed) continue;
+            this.player.registerAttackHit(`crystal-${crystal.id}`);
+            this.screenShake = Math.max(this.screenShake, result.destroyed ? 0.5 : 0.3);
+            this.hitStopTimer = Math.max(this.hitStopTimer, 0.02);
+            this._spawnParticles(crystal.cx, crystal.cy, {
+                count: result.destroyed ? 18 : 6,
+                spread: Math.PI * 2,
+                minSpeed: 30,
+                maxSpeed: 110,
+                friction: 0.88,
+                gravity: 60,
+                life: 0.45,
+                colors: [crystal.colorA, crystal.colorB, '#ffffff'],
+                size: 2,
+            });
+            if (result.destroyed) {
+                this._refreshEntityColliders();
+                this._playBeep(880, 0.1, 'triangle', 0.12);
+                this._playBeep(1240, 0.14, 'sine', 0.08);
+                if (this.hasLevelUpAbility) {
+                    this._awardXp(crystal.xp, crystal.cx, crystal.cy - 8);
+                }
+            } else {
+                this._playBeep(720, 0.05, 'square', 0.08);
             }
         }
 
@@ -2478,6 +2614,26 @@ export class Game {
         ) {
             this._drawInteractPrompt(ctx, this.treasureChest?.prompt || 'E: OPEN TREASURE');
         }
+
+        if (
+            this.started &&
+            !this.dialog &&
+            !this.rewardPopup &&
+            !this.worldMapOpen &&
+            !this.deathState &&
+            !this._playerNearElara() &&
+            !this._playerNearTombstone() &&
+            !this._playerNearTreasureChest()
+        ) {
+            const shrine = this._getNearbyShrine();
+            if (shrine) {
+                const label = shrine.ready ? shrine.prompt : `${shrine.label} · ${Math.ceil(shrine.cooldown)}S`;
+                this._drawInteractPrompt(ctx, label);
+            } else {
+                const stone = this._getNearbyLoreStone();
+                if (stone) this._drawInteractPrompt(ctx, stone.read ? 'E: RE-READ MARKER' : stone.prompt);
+            }
+        }
         if (
             this.started &&
             !this.dialog &&
@@ -2559,6 +2715,16 @@ export class Game {
                 sortY: pillar.sortY,
                 draw: () => pillar.draw(ctx),
             });
+        }
+
+        for (const stone of this.loreStones) {
+            drawables.push({ sortY: stone.sortY, draw: () => stone.draw(ctx) });
+        }
+        for (const shrine of this.shrines) {
+            drawables.push({ sortY: shrine.sortY, draw: () => shrine.draw(ctx) });
+        }
+        for (const crystal of this.crystals) {
+            drawables.push({ sortY: crystal.sortY, draw: () => crystal.draw(ctx) });
         }
 
         for (const portal of this.portals) {
@@ -3337,6 +3503,91 @@ export class Game {
         }
     }
 
+    _updateLoreReadout() {
+        const r = this.activeLoreReadout;
+        if (!r) return;
+        // Decay via frame delta; the HUD is called once per render so use gameTime delta tracking.
+        const now = this.gameTime;
+        if (r._last === undefined) r._last = now;
+        const dt = Math.max(0, now - r._last);
+        r._last = now;
+        r.timer = Math.max(0, r.timer - dt);
+        if (r.timer <= 0) this.activeLoreReadout = null;
+    }
+
+    _drawLoreReadout(ctx) {
+        const r = this.activeLoreReadout;
+        if (!r) return;
+        const font = this.assets.pixelFont;
+        const maxW = NATIVE_WIDTH - 40;
+        const bodyLines = this._wrapPixelText(r.body, maxW - 10, 1);
+        const titleW = font.measure(r.title, 1);
+        const bodyLineWidths = bodyLines.map((l) => font.measure(l, 1));
+        const contentW = Math.max(titleW + 12, ...bodyLineWidths, 120) + 12;
+        const panelW = Math.min(NATIVE_WIDTH - 20, contentW);
+        const panelH = 8 + bodyLines.length * 8 + 4;
+        const panelX = Math.round((NATIVE_WIDTH - panelW) / 2);
+        const panelY = NATIVE_HEIGHT - panelH - 60;
+
+        const fadeIn = r.timer > 4.7 ? (5 - r.timer) / 0.3 : 1;
+        const fadeOut = r.timer < 0.5 ? r.timer / 0.5 : 1;
+        const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(7, 11, 19, 0.92)';
+        ctx.fillRect(panelX, panelY, panelW, panelH);
+        ctx.strokeStyle = 'rgba(169, 240, 255, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
+
+        const titleX = panelX + Math.round((panelW - titleW) / 2);
+        font.draw(ctx, r.title, titleX + 1, panelY + 3, { color: 'rgba(0,0,0,0.7)' });
+        font.draw(ctx, r.title, titleX, panelY + 2, { color: '#ffd88a' });
+        bodyLines.forEach((line, i) => {
+            const lw = bodyLineWidths[i];
+            const lx = panelX + Math.round((panelW - lw) / 2);
+            font.draw(ctx, line, lx, panelY + 12 + i * 8, { color: '#e8f4ff' });
+        });
+        ctx.restore();
+    }
+
+    _drawShrineBuffs(ctx) {
+        const p = this.player;
+        const active = [];
+        if (p.buffMightTimer > 0) active.push({ label: 'MIGHT', color: '#ff9a70', t: p.buffMightTimer });
+        if (p.buffSwiftTimer > 0) active.push({ label: 'SWIFT', color: '#8effec', t: p.buffSwiftTimer });
+        if (p.buffWardTimer > 0)  active.push({ label: 'WARD',  color: '#dff6ff', t: p.buffWardTimer });
+        if (!active.length) return;
+
+        const font = this.assets.pixelFont;
+        // Stack buff pills vertically along the right edge, below the OBJECTIVE panel,
+        // so they never overlap the player or the bottom hint / prompt row.
+        const pillW = 52;
+        const pillH = 10;
+        const gap = 3;
+        const rightEdge = NATIVE_WIDTH - 6;
+        const baseY = this.bossState === 'fighting' ? 46 : 68;
+
+        active.forEach((buff, i) => {
+            const x = rightEdge - pillW;
+            const y = baseY + i * (pillH + gap);
+            ctx.fillStyle = 'rgba(7, 11, 19, 0.82)';
+            ctx.fillRect(x, y, pillW, pillH);
+            ctx.strokeStyle = buff.color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, y + 0.5, pillW - 1, pillH - 1);
+
+            const label = `${buff.label} ${Math.ceil(buff.t)}S`;
+            const lw = font.measure(label, 1);
+            font.draw(ctx, label, x + Math.round((pillW - lw) / 2), y + 2, { color: buff.color });
+
+            const frac = Math.max(0, Math.min(1, buff.t / 25));
+            ctx.fillStyle = buff.color;
+            ctx.fillRect(x + 1, y + pillH - 1, Math.round((pillW - 2) * frac), 1);
+        });
+    }
+
     _drawBossHpBar(ctx) {
         const boss = this.sandwormBoss;
         if (!boss) return;
@@ -3625,6 +3876,10 @@ export class Game {
 
         if (this.player.comboCount >= 3) this._drawComboMeter(ctx);
 
+        this._drawShrineBuffs(ctx);
+        this._updateLoreReadout();
+        this._drawLoreReadout(ctx);
+
         // Hide the bottom hint when any other bottom-of-screen element could overlap it:
         // the enemy nameplate (bottom-right) or an interact prompt (y = NATIVE_HEIGHT - 40).
         const enemyNearby = this.enemies.some((enemy) => {
@@ -3634,7 +3889,12 @@ export class Game {
             return dx * dx + dy * dy <= 88 * 88;
         });
         const interactPromptActive = !this.dialog && !this.rewardPopup && !this.worldMapOpen && !this.deathState && (
-            this._playerNearElara() || this._playerNearTombstone() || (this._playerNearTreasureChest() && !this.hasLevelUpAbility)
+            this._playerNearElara() ||
+            this._playerNearTombstone() ||
+            (this._playerNearTreasureChest() && !this.hasLevelUpAbility) ||
+            this._getNearbyShrine() ||
+            this._getNearbyLoreStone() ||
+            this.activeLoreReadout
         );
         const bossActive = this.bossState === 'preparing' || this.bossState === 'fighting';
         if (this.settings.showHints && this.gameTime < 10 && !enemyNearby && !interactPromptActive && !bossActive) {
@@ -4057,7 +4317,8 @@ export class Game {
         if (this.bossState === 'preparing' || this.bossState === 'fighting') return;
 
         const aliveEnemies = this.enemies.filter((enemy) => enemy.isAlive());
-        if (aliveEnemies.length >= 8) return;
+        const globalCap = this.currentRealmId === 'frontier' ? 16 : 10;
+        if (aliveEnemies.length >= globalCap) return;
 
         for (const node of this.enemySpawnNodes) {
             if (node.kind === 'goliath' && !this.goliathsUnlocked) continue;
@@ -4084,7 +4345,7 @@ export class Game {
             });
             this.enemies.push(spawn);
             aliveEnemies.push(spawn);
-            if (aliveEnemies.length >= 8) break;
+            if (aliveEnemies.length >= globalCap) break;
 
             if (dx * dx + dy * dy <= 110 * 110) {
                 this.toast = 'VOID NEST STIRS';

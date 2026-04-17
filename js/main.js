@@ -1,5 +1,5 @@
-import { loadGameAssets } from './assets.js?v=20260416-rpg-expansion';
-import { Game } from './game.js?v=20260416-rpg-expansion';
+import { loadGameAssets } from './assets.js?v=20260416-openworld';
+import { Game } from './game.js?v=20260416-openworld';
 
 try {
     localStorage.removeItem('zendoria-save-v1');
