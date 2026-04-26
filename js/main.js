@@ -1,11 +1,15 @@
-import { loadGameAssets } from './assets.js?v=20260416-openworld';
-import { Game } from './game.js?v=20260416-openworld';
+import { loadGameAssets } from './assets.js?v=20260426-npc-matte-fix';
+import { Game } from './game.js?v=20260425-sidequests';
 
-try {
-    localStorage.removeItem('zendoria-save-v1');
-    localStorage.removeItem('zendoria-checkpoints-v1');
-} catch (err) {
-    console.warn('Zendoria: unable to clear save state on refresh', err);
+const params = new URLSearchParams(window.location.search);
+if (params.get('resetSave') === '1') {
+    try {
+        localStorage.removeItem('zendoria-save-v1');
+        localStorage.removeItem('zendoria-checkpoints-v1');
+        console.warn('Zendoria: save state cleared by ?resetSave=1');
+    } catch (err) {
+        console.warn('Zendoria: unable to clear save state', err);
+    }
 }
 
 window.addEventListener('DOMContentLoaded', async () => {

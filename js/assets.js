@@ -35,6 +35,94 @@ const ENVIRONMENT_PROP_FILES = {
     tropicsPalmGlow: 'assets/sprites/biomes/tropics_palm_glow.png',
 };
 
+const NPC_VARIANT_CONFIGS = {
+    'drift-scout': {
+        base: 'elara',
+        tint: '#6fd3ff',
+        accent: '#dffbff',
+        tintStrength: 0.16,
+    },
+    'tide-medic': {
+        base: 'elara',
+        tint: '#57d7c3',
+        accent: '#f2ffcc',
+        tintStrength: 0.18,
+        flipX: true,
+    },
+    'ember-guide': {
+        base: 'elara',
+        tint: '#ffb169',
+        accent: '#fff0bf',
+        tintStrength: 0.16,
+    },
+    'salt-scribe': {
+        base: 'elara',
+        tint: '#b8d9ff',
+        accent: '#ffffff',
+        tintStrength: 0.18,
+        flipX: true,
+    },
+    'glow-warden': {
+        base: 'elara',
+        tint: '#8bed91',
+        accent: '#f8ffd4',
+        tintStrength: 0.16,
+    },
+    'lantern-keeper': {
+        base: 'boatman',
+        tint: '#ffb56f',
+        accent: '#fff0ab',
+        tintStrength: 0.14,
+    },
+    'dusk-guard': {
+        base: 'boatman',
+        tint: '#96a7ff',
+        accent: '#edf0ff',
+        tintStrength: 0.14,
+        flipX: true,
+    },
+    'road-smith': {
+        base: 'boatman',
+        tint: '#d6a05f',
+        accent: '#fff0c5',
+        tintStrength: 0.12,
+    },
+    'moss-fisher': {
+        base: 'boatman',
+        tint: '#76c79f',
+        accent: '#e4fff0',
+        tintStrength: 0.12,
+        flipX: true,
+    },
+    'salt-quartermaster': {
+        base: 'boatman',
+        tint: '#8fd8ff',
+        accent: '#ffffff',
+        tintStrength: 0.12,
+    },
+};
+
+const GENERATED_NPC_FILES = {
+    'mira-tide-medic': 'assets/sprites/npcs/generated/mira-tide-medic.png',
+    'cadrin-lantern-keeper': 'assets/sprites/npcs/generated/cadrin-lantern-keeper.png',
+    'nyra-wayfinder': 'assets/sprites/npcs/generated/nyra-wayfinder.png',
+    'eamon-wreck-diver': 'assets/sprites/npcs/generated/eamon-wreck-diver.png',
+    'suri-stone-reader': 'assets/sprites/npcs/generated/suri-stone-reader.png',
+    'dax-canyon-lookout': 'assets/sprites/npcs/generated/dax-canyon-lookout.png',
+    'veya-salt-scribe': 'assets/sprites/npcs/generated/veya-salt-scribe.png',
+    'ila-herbalist': 'assets/sprites/npcs/generated/ila-herbalist.png',
+    'bronn-road-smith': 'assets/sprites/npcs/generated/bronn-road-smith.png',
+    'orra-watch-captain': 'assets/sprites/npcs/generated/orra-watch-captain.png',
+    'kael-burnt-guide': 'assets/sprites/npcs/generated/kael-burnt-guide.png',
+    'tovin-tide-cartographer': 'assets/sprites/npcs/generated/tovin-tide-cartographer.png',
+    'luma-shell-courier': 'assets/sprites/npcs/generated/luma-shell-courier.png',
+    'fenn-moon-ferrier': 'assets/sprites/npcs/generated/fenn-moon-ferrier.png',
+    'qira-salt-glasswright': 'assets/sprites/npcs/generated/qira-salt-glasswright.png',
+    'tamas-cinder-runner': 'assets/sprites/npcs/generated/tamas-cinder-runner.png',
+    'neve-root-singer': 'assets/sprites/npcs/generated/neve-root-singer.png',
+    'halden-starherd': 'assets/sprites/npcs/generated/halden-starherd.png',
+};
+
 function removeEdgeMatte(image, options = {}) {
     const { mode = 'auto', threshold = 32 } = options;
 
@@ -185,6 +273,296 @@ function removeEdgeBlackMatte(image, threshold = 20) {
     return canvas;
 }
 
+function extractLeftmostSprite(image, { gap = 6, matteMode = 'light', matteThreshold = 36 } = {}) {
+    const mattedCanvas = removeEdgeMatte(image, { mode: matteMode, threshold: matteThreshold });
+    const trimmed = trimTransparentBounds(mattedCanvas, 0);
+    const srcCanvas = trimmed.getContext ? trimmed : (() => { const c = document.createElement('canvas'); c.width = trimmed.width; c.height = trimmed.height; c.getContext('2d').drawImage(trimmed, 0, 0); return c; })();
+    const ctx = srcCanvas.getContext('2d');
+    const { data, width, height } = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+    const colHasAlpha = new Uint8Array(width);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (data[(y * width + x) * 4 + 3] > 24) {
+                colHasAlpha[x] = 1;
+            }
+        }
+    }
+    let start = 0;
+    while (start < width && !colHasAlpha[start]) start++;
+    let end = start;
+    let consecutiveGap = 0;
+    while (end < width) {
+        if (colHasAlpha[end]) {
+            consecutiveGap = 0;
+            end++;
+        } else {
+            consecutiveGap++;
+            if (consecutiveGap >= gap) break;
+            end++;
+        }
+    }
+    end -= consecutiveGap;
+    const sliceW = Math.max(1, end - start);
+    const slice = document.createElement('canvas');
+    slice.width = sliceW;
+    slice.height = height;
+    const sliceCtx = slice.getContext('2d');
+    sliceCtx.imageSmoothingEnabled = false;
+    sliceCtx.drawImage(srcCanvas, start, 0, sliceW, height, 0, 0, sliceW, height);
+    return trimTransparentBounds(slice, 0);
+}
+
+function cloneToCanvas(source) {
+    const canvas = document.createElement('canvas');
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(source, 0, 0);
+    return canvas;
+}
+
+function extractFramesFromStrip(image, frameW, frameH, row = 0) {
+    const cols = Math.max(1, Math.floor(image.width / frameW));
+    const frames = [];
+    for (let col = 0; col < cols; col++) {
+        const frame = document.createElement('canvas');
+        frame.width = frameW;
+        frame.height = frameH;
+        const ctx = frame.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+            image,
+            col * frameW,
+            row * frameH,
+            frameW,
+            frameH,
+            0,
+            0,
+            frameW,
+            frameH,
+        );
+        frames.push(frame);
+    }
+    return frames;
+}
+
+function flipSprite(source) {
+    const canvas = document.createElement('canvas');
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(source, 0, 0);
+    return canvas;
+}
+
+function tintSprite(source, color, opacity = 0.16) {
+    const canvas = cloneToCanvas(source);
+    const ctx = canvas.getContext('2d');
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = opacity * 0.35;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    return canvas;
+}
+
+function addNpcAccentMarks(source, accent, family = 'elara') {
+    const canvas = cloneToCanvas(source);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = accent;
+
+    if (family === 'boatman') {
+        ctx.fillRect(Math.max(1, Math.floor(canvas.width * 0.34)), Math.floor(canvas.height * 0.34), 3, 2);
+        ctx.fillRect(Math.max(1, Math.floor(canvas.width * 0.47)), Math.floor(canvas.height * 0.72), 4, 1);
+    } else {
+        ctx.fillRect(Math.max(1, Math.floor(canvas.width * 0.56)), Math.floor(canvas.height * 0.42), 2, 2);
+        ctx.fillRect(Math.max(1, Math.floor(canvas.width * 0.38)), Math.floor(canvas.height * 0.66), 3, 1);
+    }
+    return canvas;
+}
+
+function buildNpcVariant(baseFrames, {
+    base = 'elara',
+    tint = null,
+    accent = '#8effec',
+    tintStrength = 0.16,
+    flipX: shouldFlip = false,
+} = {}) {
+    const family = base === 'boatman' ? 'boatman' : 'elara';
+    const frames = baseFrames.map((frame) => {
+        let next = cloneToCanvas(frame);
+        if (tint) next = tintSprite(next, tint, tintStrength);
+        next = addNpcAccentMarks(next, accent, family);
+        if (shouldFlip) next = flipSprite(next);
+        return next;
+    });
+    return {
+        family,
+        accent,
+        frameDuration: family === 'boatman' ? 0.42 : 0.22,
+        floatAmplitude: family === 'boatman' ? 0.6 : 0.3,
+        floatSpeed: family === 'boatman' ? 1.6 : 2.1,
+        frames,
+    };
+}
+
+function extractSpriteGridDetailed(image, {
+    whiteCutoff = 220,
+    minSpriteW = 24,
+    minSpriteH = 24,
+    minSize = 200,
+    maxSpriteW = 160,
+    maxSpriteH = 200,
+} = {}) {
+    const width = image.width;
+    const height = image.height;
+    const source = document.createElement('canvas');
+    source.width = width;
+    source.height = height;
+    const ctx = source.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(image, 0, 0);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const { data } = imageData;
+
+    const total = width * height;
+    const mask = new Uint8Array(total);
+    for (let i = 0; i < total; i++) {
+        const p = i * 4;
+        if (data[p + 3] === 0) continue;
+        const r = data[p];
+        const g = data[p + 1];
+        const b = data[p + 2];
+        if (r >= whiteCutoff && g >= whiteCutoff && b >= whiteCutoff) {
+            data[p + 3] = 0;
+            continue;
+        }
+        mask[i] = 1;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    const comp = new Int32Array(total);
+    const stack = [];
+    const bboxes = [];
+    let compId = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            if (!mask[idx] || comp[idx]) continue;
+            compId++;
+            comp[idx] = compId;
+            stack.push(idx);
+            let minX = x, minY = y, maxX = x, maxY = y, size = 0;
+            while (stack.length) {
+                const k = stack.pop();
+                const kx = k % width;
+                const ky = (k - kx) / width;
+                size++;
+                if (kx < minX) minX = kx;
+                if (kx > maxX) maxX = kx;
+                if (ky < minY) minY = ky;
+                if (ky > maxY) maxY = ky;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (!dy && !dx) continue;
+                        const nx = kx + dx;
+                        const ny = ky + dy;
+                        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                        const nk = ny * width + nx;
+                        if (mask[nk] && !comp[nk]) {
+                            comp[nk] = compId;
+                            stack.push(nk);
+                        }
+                    }
+                }
+            }
+            bboxes.push({ x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1, size });
+        }
+    }
+
+    const sprites = [];
+    for (const b of bboxes) {
+        if (b.size < minSize) continue;
+        if (b.w < minSpriteW || b.h < minSpriteH) continue;
+        if (b.w > maxSpriteW || b.h > maxSpriteH) continue;
+        const cell = document.createElement('canvas');
+        cell.width = b.w;
+        cell.height = b.h;
+        const cellCtx = cell.getContext('2d');
+        cellCtx.imageSmoothingEnabled = false;
+        cellCtx.drawImage(source, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+        sprites.push({
+            ...b,
+            canvas: trimTransparentBounds(cell, 0),
+        });
+    }
+    return sprites;
+}
+
+function extractSpriteGrid(image, options = {}) {
+    return extractSpriteGridDetailed(image, options).map((entry) => entry.canvas);
+}
+
+function extractBoatmanFrames(image) {
+    const sprites = extractSpriteGridDetailed(image, {
+        whiteCutoff: 238,
+        minSpriteW: 120,
+        minSpriteH: 220,
+        minSize: 8000,
+        maxSpriteW: 640,
+        maxSpriteH: 900,
+    });
+    const figures = sprites
+        .sort((a, b) => (b.w * b.h) - (a.w * a.h))
+        .slice(0, 2)
+        .sort((a, b) => a.x - b.x)
+        .map((entry) => fitSpriteToBox(entry.canvas, 32, 40));
+    return figures.length ? figures : [fitSpriteToBox(extractLeftmostSprite(image), 32, 40)];
+}
+
+function fitSpriteToBox(source, boxW, boxH) {
+    const scale = Math.min(boxW / source.width, boxH / source.height);
+    const targetW = Math.max(1, Math.round(source.width * scale));
+    const targetH = Math.max(1, Math.round(source.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = boxW;
+    canvas.height = boxH;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const dx = Math.floor((boxW - targetW) / 2);
+    const dy = boxH - targetH;
+    ctx.drawImage(source, 0, 0, source.width, source.height, dx, dy, targetW, targetH);
+    return canvas;
+}
+
+function prepareGeneratedNpcSprite(image) {
+    if (!image) return null;
+    // Source PNGs already have transparent backgrounds (alpha=0 corners).
+    // Running the dark-matte flood here would fill inward through the
+    // transparent border and erase any opaque pixel where R/G/B are all
+    // below the threshold — i.e. the figure's hair, shadows, dark clothing,
+    // and outline edges. That destroyed 28-80% of every NPC's pixels.
+    // Just trim to visible bounds and let fitSpriteToBox do the rest.
+    const cleaned = trimTransparentBounds(image, 1);
+    return {
+        family: 'unique',
+        w: 32,
+        h: 40,
+        frames: [fitSpriteToBox(cleaned, 32, 40)],
+        portrait: cleaned,
+        frameDuration: 0.34,
+        floatAmplitude: 0.18,
+        floatSpeed: 1.8,
+    };
+}
+
 function trimTransparentBounds(image, padding = 0) {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
@@ -242,6 +620,7 @@ function trimTransparentBounds(image, padding = 0) {
 export async function loadGameAssets() {
     const environmentEntries = Object.entries(ENVIRONMENT_PROP_FILES);
     const enemyEntries = Object.entries(ENEMY_CONFIGS);
+    const generatedNpcEntries = Object.entries(GENERATED_NPC_FILES);
     const [
         playerImage,
         swordImage,
@@ -257,6 +636,13 @@ export async function loadGameAssets() {
         elaraIdleImage,
         elaraDialog1,
         elaraDialog2,
+        boatmanIdleImage,
+        boatmanDialog1,
+        boatmanDialog2,
+        boatmanDialog3,
+        rowboatSheetImage,
+        aiSheet1Image,
+        aiSheet2Image,
         mapScrollImage,
         treasureChestClosedImage,
         treasureChestOpenImage,
@@ -284,6 +670,13 @@ export async function loadGameAssets() {
         loadImage('assets/sprites/npcs/elara_idle_strip.png'),
         loadImage('assets/ui/dialog/elara_dialogue_1.png'),
         loadImage('assets/ui/dialog/elara_dialogue_2.png'),
+        loadImage('assets/sprites/npcs/boatman_idle.png'),
+        loadImage('assets/ui/dialog/boatman_dialogue_1.png'),
+        loadImage('assets/ui/dialog/boatman_dialogue_2.png'),
+        loadImage('assets/ui/dialog/boatman_dialogue_3.png'),
+        loadImage('assets/sprites/environment/rowboat_sheet.png'),
+        loadImage('assets/sprites/environment/ai_sheet_1.png'),
+        loadImage('assets/sprites/environment/ai_sheet_2.png'),
         loadImage('assets/ui/map/map_scroll.png'),
         loadImage('assets/sprites/environment/treasure-chest-closed.png'),
         loadImage('assets/sprites/environment/treasure-chest-open.png'),
@@ -296,16 +689,24 @@ export async function loadGameAssets() {
         loadImage('assets/sprites/pillars/pillar_sheet.png'),
         loadImage('assets/sprites/boss/sandworm_sheet.png'),
         ...enemyEntries.map(([, config]) => loadImage(config.src)),
+        ...generatedNpcEntries.map(([id, src]) => loadImage(src).catch((error) => {
+            console.warn(`Zendoria: optional generated NPC art failed for ${id}`, error);
+            return null;
+        })),
         ...environmentEntries.map(([, src]) => loadImage(src)),
     ]);
 
     const enemyImages = runtimeImages.slice(0, enemyEntries.length);
-    const environmentImages = runtimeImages.slice(enemyEntries.length);
+    const generatedNpcImages = runtimeImages.slice(enemyEntries.length, enemyEntries.length + generatedNpcEntries.length);
+    const environmentImages = runtimeImages.slice(enemyEntries.length + generatedNpcEntries.length);
     const enemySheets = Object.fromEntries(
         enemyEntries.map(([kind, config], index) => [
             kind,
             new SpriteSheet(enemyImages[index], config.frameW, config.frameH),
         ]),
+    );
+    const npcGeneratedVariants = Object.fromEntries(
+        generatedNpcEntries.map(([id], index) => [id, prepareGeneratedNpcSprite(generatedNpcImages[index])]),
     );
     const environmentProps = Object.fromEntries(
         environmentEntries.map(([key], index) => [key, environmentImages[index]]),
@@ -317,6 +718,18 @@ export async function loadGameAssets() {
         Math.floor(tombstoneRaw.width / 2),
         tombstoneRaw.height,
     );
+    const elaraIdleFrames = extractFramesFromStrip(elaraIdleImage, 24, 32);
+    const boatmanIdleFrames = extractBoatmanFrames(boatmanIdleImage);
+    const npcVariantBases = {
+        elara: elaraIdleFrames,
+        boatman: boatmanIdleFrames,
+    };
+    const npcVariants = Object.fromEntries(
+        Object.entries(NPC_VARIANT_CONFIGS).map(([key, config]) => [
+            key,
+            buildNpcVariant(npcVariantBases[config.base] || elaraIdleFrames, config),
+        ]),
+    );
 
     return {
         playerSheet: new SpriteSheet(playerImage, 32, 40),
@@ -326,8 +739,25 @@ export async function loadGameAssets() {
         slashSheet: new SpriteSheet(slashImage, 48, 48),
         pixelFont: new PixelFont(fontImage),
         elaraIdleSheet: new SpriteSheet(elaraIdleImage, 24, 32),
+        elaraIdleFrames,
         elaraDialog1: removeEdgeBlackMatte(elaraDialog1),
         elaraDialog2: removeEdgeBlackMatte(elaraDialog2),
+        boatmanSprite: boatmanIdleFrames[0],
+        boatmanIdleFrames,
+        boatmanDialog1: removeEdgeMatte(boatmanDialog1, { mode: 'light', threshold: 28 }),
+        boatmanDialog2: removeEdgeMatte(boatmanDialog2, { mode: 'light', threshold: 28 }),
+        boatmanDialog3: removeEdgeMatte(boatmanDialog3, { mode: 'light', threshold: 28 }),
+        npcGeneratedVariants,
+        npcVariants,
+        rowboatSprite: fitSpriteToBox(
+            extractSpriteGrid(rowboatSheetImage, { minSpriteW: 40, minSpriteH: 20, maxSpriteW: 400, maxSpriteH: 400, minSize: 500 })
+                .sort((a, b) => (b.width * b.height) - (a.width * a.height))[0] ?? rowboatSheetImage,
+            28, 20,
+        ),
+        aiDecorProps: [
+            ...extractSpriteGrid(aiSheet1Image).map((sprite) => fitSpriteToBox(sprite, 28, 28)),
+            ...extractSpriteGrid(aiSheet2Image).map((sprite) => fitSpriteToBox(sprite, 28, 28)),
+        ],
         environmentProps,
         mapScrollImage: trimTransparentBounds(removeEdgeMatte(mapScrollImage, { mode: 'auto', threshold: 48 }), 2),
         treasureChestClosedImage: trimTransparentBounds(treasureChestClosedImage, 2),
