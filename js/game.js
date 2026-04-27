@@ -447,7 +447,18 @@ export class Game {
             return;
         }
 
+        // Esc is context-aware: it should close whatever overlay is currently
+        // on top before opening the pause menu. Otherwise pressing Esc while
+        // the world map is open stacks Settings on top of the map and
+        // resuming leaves the map still open beneath -- confusing UX.
         if (!this.paused && this.input.wasPressed('Escape')) {
+            if (this.worldMapOpen) {
+                this._closeWorldMap();
+                this.input.endFrame();
+                this._render();
+                requestAnimationFrame((time) => this._loop(time));
+                return;
+            }
             this._openPauseMenu();
             this.input.endFrame();
             this._render();
@@ -542,6 +553,7 @@ export class Game {
 
         this.hasMap = false;
         this.hasTalkedToElara = false;
+        this.hasSeenEnemy = false;
         this.dialog = null;
         this.rewardPopup = null;
 
@@ -1605,6 +1617,7 @@ export class Game {
         this.hasTalkedToElara = !!save.hasTalkedToElara;
         this.hasTalkedToBoatman = !!save.hasTalkedToBoatman;
         this.enemyKillCounts = this._normalizeEnemyKillCounts(save.enemyKillCounts);
+        this.hasSeenEnemy = !!save.hasSeenEnemy;
         this.hasMap = !!save.hasMap;
         // hasBoat MUST be restored BEFORE _loadRealm runs — _loadRealm only
         // constructs the Boat entity when hasBoat is true.
@@ -5601,6 +5614,10 @@ export class Game {
             const dy = enemy.cy - this.player.cy;
             return dx * dx + dy * dy <= 88 * 88;
         });
+        // Once any enemy has come within range of the player, latch the
+        // hasSeenEnemy flag so the combat-coaching line stays appropriate
+        // even after the enemy moves out of range or dies.
+        if (enemyNearby) this.hasSeenEnemy = true;
         const interactPromptActive = !this.dialog && !this.rewardPopup && !this.worldMapOpen && !this.deathState && (
             this._playerNearElara() ||
             this._playerNearTombstone() ||
@@ -5619,10 +5636,17 @@ export class Game {
         const bossActive = this.bossState === 'preparing' || this.bossState === 'fighting';
         if (this.settings.showHints && this.gameTime < 10 && !enemyNearby && !interactPromptActive && !bossActive) {
             const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
+            // Show the combat hint only after the player has actually been
+            // near an enemy. Pre-encounter, combat coaching is noise --
+            // the first hint should only teach movement.
+            const showCombatLine = this.hasSeenEnemy;
+            const bannerH = showCombatLine ? 18 : 10;
             ctx.fillStyle = `rgba(7, 11, 19, ${0.78 * alpha})`;
-            ctx.fillRect(42, NATIVE_HEIGHT - 24, 174, 18);
-            font.draw(ctx, 'MOVE WITH WASD OR ARROWS.', 48, NATIVE_HEIGHT - 21, { color: '#eef6ff', alpha });
-            font.draw(ctx, 'STEP IN, STRIKE, BACK OFF.', 48, NATIVE_HEIGHT - 12, { color: '#97b6cf', alpha });
+            ctx.fillRect(42, NATIVE_HEIGHT - (showCombatLine ? 24 : 16), 174, bannerH);
+            font.draw(ctx, 'MOVE WITH WASD OR ARROWS.', 48, NATIVE_HEIGHT - (showCombatLine ? 21 : 13), { color: '#eef6ff', alpha });
+            if (showCombatLine) {
+                font.draw(ctx, 'STEP IN, STRIKE, BACK OFF.', 48, NATIVE_HEIGHT - 12, { color: '#97b6cf', alpha });
+            }
         }
 
         if (this.toastTimer > 0 && this.toast) {
@@ -6082,6 +6106,7 @@ export class Game {
             hasReachedTropics: this.hasReachedTropics,
             hasTalkedToElara: this.hasTalkedToElara,
             hasTalkedToBoatman: this.hasTalkedToBoatman,
+            hasSeenEnemy: this.hasSeenEnemy,
             hasMap: this.hasMap,
             hasBoat: this.hasBoat,
             hasLevelUpAbility: this.hasLevelUpAbility,

@@ -1,5 +1,5 @@
 import { loadGameAssets } from './assets.js?v=20260426-npc-matte-fix';
-import { Game } from './game.js?v=20260425-sidequests';
+import { Game } from './game.js?v=20260426-hint-and-esc';
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('resetSave') === '1') {
