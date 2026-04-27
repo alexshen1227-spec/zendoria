@@ -570,6 +570,10 @@ export class Game {
         this.hasMap = false;
         this.hasTalkedToElara = false;
         this.hasSeenEnemy = false;
+        // Set true the first time the player opens the pause menu. Used
+        // by the HUD to drop the redundant 'ESC MENU' reminder line once
+        // the player has actually used Esc. Source: P1-6 from playtest meta.
+        this.hasOpenedPauseMenu = false;
         this.dialog = null;
         this.rewardPopup = null;
 
@@ -1444,6 +1448,11 @@ export class Game {
         if (!this.started) return;
         this.paused = true;
         this.pauseMenuIndex = 0;
+        // Latch the first-pause flag so the HUD drops the 'ESC MENU' reminder
+        // on subsequent play. Persists across save/load. Source: P1-6.
+        if (!this.hasOpenedPauseMenu) {
+            this.hasOpenedPauseMenu = true;
+        }
         if (this.pauseOverlay) this.pauseOverlay.classList.remove('hidden');
         // Drop any inputs in flight so the player doesn't keep walking after pausing.
         if (this.input && typeof this.input.clearAll === 'function') this.input.clearAll();
@@ -1637,6 +1646,7 @@ export class Game {
         this.hasTalkedToBoatman = !!save.hasTalkedToBoatman;
         this.enemyKillCounts = this._normalizeEnemyKillCounts(save.enemyKillCounts);
         this.hasSeenEnemy = !!save.hasSeenEnemy;
+        this.hasOpenedPauseMenu = !!save.hasOpenedPauseMenu;
         this.hasMap = !!save.hasMap;
         // hasBoat MUST be restored BEFORE _loadRealm runs — _loadRealm only
         // constructs the Boat entity when hasBoat is true.
@@ -5668,7 +5678,11 @@ export class Game {
             '#8effec');
 
         const objectiveLines = this._wrapPixelText(this._currentObjectiveText(), 122);
-        const actionRows = ['ESC MENU'];
+        // 'ESC MENU' reminder is only useful before the player has opened the
+        // menu once. After they've used Esc, they know it's there, and the HUD
+        // gets cleaner without the redundant prompt. Source: P1-6 from the
+        // 2026-04-26 playtest meta-analysis (hardcore-sim HUD critique).
+        const actionRows = this.hasOpenedPauseMenu ? [] : ['ESC MENU'];
         const unlockedRows = [];
         if (this.hasMap) unlockedRows.push('M MAP');
         if (this.hasLevelUpAbility) unlockedRows.push('K SKILLS');
@@ -6237,6 +6251,7 @@ export class Game {
             hasTalkedToElara: this.hasTalkedToElara,
             hasTalkedToBoatman: this.hasTalkedToBoatman,
             hasSeenEnemy: this.hasSeenEnemy,
+            hasOpenedPauseMenu: this.hasOpenedPauseMenu,
             hasMap: this.hasMap,
             hasBoat: this.hasBoat,
             hasLevelUpAbility: this.hasLevelUpAbility,
