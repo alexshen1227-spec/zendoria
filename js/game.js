@@ -4350,7 +4350,15 @@ export class Game {
             !this._playerNearTreasureChest()
         ) {
             const portal = this._getNearbyPortal();
-            if (portal) this._drawInteractPrompt(ctx, portal.prompt);
+            if (portal) {
+                this._drawInteractPrompt(ctx, portal.prompt);
+                // Also float a smaller "E: ENTER" banner directly above the
+                // portal so the player sees the prompt connect to the gate
+                // they're standing in front of -- the bottom-of-screen prompt
+                // alone wasn't drawing the eye for first-time players.
+                // Source: P0-4 from 2026-04-26 playtest meta-analysis.
+                this._drawPortalProximityBadge(ctx, portal);
+            }
         }
         if (this.dialog && !this.rewardPopup) {
             this._drawDialog(ctx);
@@ -5585,6 +5593,26 @@ export class Game {
         ctx.lineWidth = 1;
         ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, 9);
         font.draw(ctx, label, boxX + 5, boxY + 2, { color: '#ffe78a' });
+    }
+
+    _drawPortalProximityBadge(ctx, portal) {
+        const font = this.assets?.pixelFont;
+        if (!font || !portal) return;
+        const label = 'E: ENTER';
+        const textW = font.measure(label, 1);
+        const boxW = textW + 10;
+        // Drawn in screen space (no camera transform here -- the caller has
+        // already ended the camera). Convert portal.cx/y to screen coords.
+        const screenX = Math.round(portal.cx - this.camera.x - boxW / 2);
+        const screenY = Math.round(portal.y - this.camera.y - 14);
+        const pulse = Math.sin(this.gameTime * 5.5) * 0.5 + 0.5;
+
+        ctx.fillStyle = `rgba(7, 11, 19, ${0.72 + pulse * 0.08})`;
+        ctx.fillRect(screenX, screenY, boxW, 10);
+        ctx.strokeStyle = `rgba(142, 255, 236, ${0.4 + pulse * 0.4})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(screenX + 0.5, screenY + 0.5, boxW - 1, 9);
+        font.draw(ctx, label, screenX + 5, screenY + 2, { color: '#8effec' });
     }
 
     _drawHUD(ctx) {
