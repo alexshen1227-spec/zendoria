@@ -27,7 +27,16 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (loadingLabel) loadingLabel.textContent = 'Up/Down or W/S to move, Enter or Space to select. Esc opens settings in-game.';
 
         const game = new Game(canvas, assets);
-        window.__zendoriaGame = game;
+        // Dev hook: only expose the game on window when explicitly opted in.
+        // Keeps console access for the developer (?dev=1 or localStorage flag)
+        // while staying invisible to itch.io / public players.
+        const devEnabled =
+            params.get('dev') === '1' ||
+            (() => {
+                try { return localStorage.getItem('zendoria-dev-mode') === 'true'; }
+                catch (_) { return false; }
+            })();
+        if (devEnabled) window.__zendoriaGame = game;
         game.run();
 
         console.log('%cZendoria - Driftmere Isle build loaded', 'color: #8dffe2; font-weight: bold;');

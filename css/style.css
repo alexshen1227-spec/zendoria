@@ -258,6 +258,7 @@ body::before {
 .pause-overlay.hidden {
     opacity: 0;
     pointer-events: none;
+    display: none;
 }
 
 .title-shell {
