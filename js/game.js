@@ -554,6 +554,13 @@ export class Game {
         this.objectiveTimer = 8;
         this.toast = '';
         this.toastTimer = 0;
+        // Important toast: a separate, larger, center-screen banner used
+        // for gating messages the player MUST notice (e.g. boatman blocked
+        // by sandworm fight). Reserved for must-read prompts so the regular
+        // toast slot stays useful for fast feedback.
+        // Source: P0-5 from 2026-04-26 playtest meta-analysis.
+        this.importantToast = '';
+        this.importantToastTimer = 0;
         this.hasReachedCanyons = false;
         this.hasReachedSaltFlats = false;
         this.hasReachedTropics = false;
@@ -1717,6 +1724,8 @@ export class Game {
 
         this.toast = this.hasLevelUpAbility ? `${this.world.realmLabel} RESTORED` : '';
         this.toastTimer = 0;
+        this.importantToast = '';
+        this.importantToastTimer = 0;
         this.objectiveTimer = 0;
 
         this.camera.snap(this.player, this.world.pixelW, this.world.pixelH);
@@ -1754,6 +1763,7 @@ export class Game {
             this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
             this._updateParticles(dt);
             this.toastTimer = Math.max(0, this.toastTimer - dt);
+            this.importantToastTimer = Math.max(0, this.importantToastTimer - dt);
             return;
         }
 
@@ -1890,6 +1900,7 @@ export class Game {
 
         this.screenShake = Math.max(0, this.screenShake - dt * 8);
         this.toastTimer = Math.max(0, this.toastTimer - dt);
+        this.importantToastTimer = Math.max(0, this.importantToastTimer - dt);
         this._updateLevelProgressFx(dt);
 
         this.saveTimer += dt;
@@ -2522,8 +2533,11 @@ export class Game {
         }
         if (this._playerNearBoatman() && this.input.wasPressed('KeyE')) {
             if (!this.bossDefeated.sandworm) {
-                this.toast = 'DEFEAT THE SANDWORM FIRST';
-                this.toastTimer = 2.2;
+                // Use importantToast (center-screen, larger, ~3.6s) so the
+                // gate message can't be missed. Mom's playtest had her walk
+                // away thinking the boatman was decorative.
+                this.importantToast = 'DEFEAT THE SANDWORM FIRST';
+                this.importantToastTimer = 3.6;
                 this._playBeep(220, 0.1, 'square', 0.1);
                 return;
             }
@@ -5745,6 +5759,37 @@ export class Game {
             lines.forEach((line, i) => {
                 const lw = lineWidths[i];
                 font.draw(ctx, line, toastX + Math.round((toastWidth - lw) / 2), toastY + 2 + i * 8, { color: '#8df7d2' });
+            });
+        }
+
+        // Important toast: center-screen, 2x scale, drop shadow, high-contrast
+        // background. Used for must-read prompts (e.g. boatman gating). Source:
+        // P0-5 from 2026-04-26 playtest meta-analysis.
+        if (this.importantToastTimer > 0 && this.importantToast) {
+            const scale = 2;
+            const maxW = NATIVE_WIDTH - 24;
+            const lines = this._wrapPixelText(this.importantToast, maxW - 24, scale);
+            const lineWidths = lines.map((l) => font.measure(l, scale));
+            const widest = Math.max(...lineWidths);
+            const boxW = Math.max(140, widest + 24);
+            const lineH = 18;
+            const boxH = 12 + lines.length * lineH;
+            const boxX = Math.round((NATIVE_WIDTH - boxW) / 2);
+            const boxY = Math.round((NATIVE_HEIGHT - boxH) / 2 - 8);
+            // Solid backing for legibility against any biome background.
+            ctx.fillStyle = 'rgba(2, 4, 10, 0.92)';
+            ctx.fillRect(boxX - 2, boxY - 2, boxW + 4, boxH + 4);
+            ctx.fillStyle = '#3a1410';
+            ctx.fillRect(boxX, boxY, boxW, boxH);
+            ctx.strokeStyle = '#ffb866';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+            lines.forEach((line, i) => {
+                const lw = lineWidths[i];
+                const lineX = boxX + Math.round((boxW - lw) / 2);
+                const lineY = boxY + 6 + i * lineH;
+                font.draw(ctx, line, lineX + 1, lineY + 1, { color: 'rgba(0, 0, 0, 0.7)', scale });
+                font.draw(ctx, line, lineX, lineY, { color: '#ffe78a', scale });
             });
         }
 
