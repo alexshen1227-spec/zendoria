@@ -228,6 +228,15 @@ export class Game {
     _setupAdminPanel() {
         const panel = document.querySelector('[data-admin-panel]');
         if (!panel) return;
+        // Gate admin behind ?dev=1 (or zendoria-dev-mode localStorage flag) so
+        // itch.io / public players can't open the cheat panel with backtick.
+        const params = new URLSearchParams(window.location.search);
+        let devEnabled = params.get('dev') === '1';
+        try { devEnabled = devEnabled || localStorage.getItem('zendoria-dev-mode') === 'true'; } catch (_) {}
+        if (!devEnabled) {
+            panel.classList.add('hidden');
+            return;
+        }
         this.adminPanel = panel;
         const closeBtn = panel.querySelector('[data-admin-close]');
         if (closeBtn) closeBtn.addEventListener('click', () => panel.classList.add('hidden'));
