@@ -4339,7 +4339,30 @@ export class Game {
         if (this.worldMapOpen) this._drawWorldMap(ctx);
         if (this.skillTreeOpen) this._drawSkillTree(ctx);
         if (this.deathState) this._drawDeathScreen(ctx);
+        // PAUSED indicator on the canvas itself, drawn behind the DOM
+        // pause-overlay (which sits at z-index 6 and dims the page).
+        // Without this, the canvas just freezes silently and players think
+        // the game has hung. Source: P0-1 from 2026-04-26 playtest meta.
+        if (this.paused && this.started) this._drawPausedIndicator(ctx);
         this._drawFrame(ctx);
+    }
+
+    _drawPausedIndicator(ctx) {
+        const font = this.assets?.pixelFont;
+        if (!font) return;
+        // Soft dim under the text so it reads against busy backgrounds.
+        ctx.fillStyle = 'rgba(4, 7, 16, 0.42)';
+        ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+
+        const label = 'PAUSED';
+        const scale = 3;
+        const lw = font.measure(label, scale);
+        const x = Math.round((NATIVE_WIDTH - lw) / 2);
+        const y = Math.round(NATIVE_HEIGHT / 2 - 18);
+        // Drop shadow then bright body so the word reads even with the
+        // settings panel overlay covering most of the page.
+        font.draw(ctx, label, x + 1, y + 1, { color: 'rgba(0, 0, 0, 0.7)', scale });
+        font.draw(ctx, label, x, y, { color: '#ffe78a', scale });
     }
 
     _drawEntitiesSorted(ctx) {
