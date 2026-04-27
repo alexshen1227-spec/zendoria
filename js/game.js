@@ -1493,14 +1493,17 @@ export class Game {
 
         const selected = PAUSE_MENU_KEYS[this.pauseMenuIndex];
 
+        // Toggle rows (Sound, Hints) respond to arrow keys only. Drill-in rows
+        // (Controls) and action rows (Resume, Return To Title) respond to
+        // Enter/Space. Previously Enter also toggled Sound/Hints, which caused
+        // Default Sim to accidentally turn them off while navigating down to
+        // Controls. Source: P1-3 from 2026-04-26 playtest meta-analysis.
         if (selected === 'sound' || selected === 'hints') {
             if (
                 this.input.wasPressed('ArrowLeft') ||
                 this.input.wasPressed('ArrowRight') ||
                 this.input.wasPressed('KeyA') ||
-                this.input.wasPressed('KeyD') ||
-                this.input.wasPressed('Enter') ||
-                this.input.wasPressed('Space')
+                this.input.wasPressed('KeyD')
             ) {
                 this._togglePauseSetting(selected);
             }
