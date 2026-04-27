@@ -343,8 +343,8 @@ export class World {
                         duration: 52,
                         color: '#8effec',
                     },
-                    toast: 'TOVINS ROUTE INK SET',
-                    progressToast: 'TOVIN NEEDS ELARAS MAP',
+                    toast: "TOVIN'S ROUTE WARD SET",
+                    progressToast: "TOVIN NEEDS ELARA'S MAP",
                 },
                 dialog: {
                     active: [
@@ -356,10 +356,10 @@ export class World {
                     ],
                     ready: [
                         'There it is. Elara keeps cleaner lines than any sailor I know.',
-                        'Hold still while I stitch a route ward into the edge of your map.',
+                        'Hold still while I stitch a route ward into your bones -- keeps your sense of direction true even when the void scrambles it.',
                     ],
                     used: [
-                        'Your map carries my tide marks now. If the road bends, the ink will know first.',
+                        'My ward is humming through your boots. If the road bends, your gut will know first.',
                     ],
                 },
             },
