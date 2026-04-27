@@ -1,8 +1,8 @@
 import { NATIVE_WIDTH, NATIVE_HEIGHT, SCALE, TILE } from './constants.js?v=20260414-no-bridge-pass2';
 import { Input } from './input.js?v=20260418-polish-pass2';
-import { Player } from './player.js?v=20260418-singularity';
+import { Player } from './player.js?v=20260427-tap-impulse';
 import { Camera } from './camera.js?v=20260414-no-bridge-pass2';
-import { World } from './world.js?v=20260425-sidequests';
+import { World } from './world.js?v=20260427-spawn-and-tovin';
 import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260418-polish-pass2';
 import { Elara, Boatman, AmbientNpc } from './npc.js?v=20260425-sidequests';
 import { Boat } from './boat.js?v=20260418-polish-pass2';

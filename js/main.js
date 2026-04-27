@@ -1,5 +1,5 @@
-import { loadGameAssets } from './assets.js?v=20260426-npc-matte-fix';
-import { Game } from './game.js?v=20260426-admin-gate';
+import { loadGameAssets } from './assets.js?v=20260427-round2';
+import { Game } from './game.js?v=20260427-round2';
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('resetSave') === '1') {
