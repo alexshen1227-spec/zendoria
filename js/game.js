@@ -2102,9 +2102,31 @@ export class Game {
     }
 
     _openBoatmanDialog() {
+        // The original boatman_dialogue_*.png panels had the text BAKED into
+        // the artwork in a rounded lowercase font that didn't match every
+        // other NPC's pixel uppercase font. Switching to runtime-rendered
+        // pages preserves the same dialogue text but renders it via the
+        // shared pixel font, fixing the typography inconsistency.
+        // Source: P1-1 from 2026-04-26 playtest meta-analysis.
+        const portrait = this.assets.boatmanSprite || this.assets.boatmanIdleFrames?.[0] || null;
+        const accent = '#ffd58a';
+        const lines = [
+            "EY THERE. YOU LOOK LIKE YOU'VE GOT PLACES TO BE AND A WHOLE LOT OF WATER IN YOUR WAY.",
+            "TELL YOU WHAT. I'VE GOT THIS TRUSTY WOODEN ROWBOAT JUST SITTING HERE COLLECTING MOSS. HOW ABOUT I 'LEND' IT TO YOU? PERMANENTLY.",
+            "DON'T ASK WHERE I GOT IT, AND I WON'T ASK WHERE YOU'RE ROWING IT. DEAL?",
+        ];
+        const pages = lines.flatMap((body) => (
+            this._paginateNpcDialogBody(body).map((pageBody) => ({
+                speaker: 'BOATMAN',
+                title: 'FERRY KEEPER',
+                body: pageBody,
+                accent,
+                portrait,
+            }))
+        ));
         this.dialog = {
             kind: 'boatman',
-            images: [this.assets.boatmanDialog1, this.assets.boatmanDialog2, this.assets.boatmanDialog3],
+            pages,
             index: 0,
             soundTimer: DIALOG_SOUND_DURATION,
             grantMapAfter: -1,
