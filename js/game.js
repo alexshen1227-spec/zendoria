@@ -1,22 +1,25 @@
-import { NATIVE_WIDTH, NATIVE_HEIGHT, SCALE } from './constants.js?v=20260414-no-bridge-pass2';
-import { Input } from './input.js?v=20260414-no-bridge-pass2';
-import { Player } from './player.js?v=20260416-rpg-expansion';
+import { NATIVE_WIDTH, NATIVE_HEIGHT, SCALE, TILE } from './constants.js?v=20260414-no-bridge-pass2';
+import { Input } from './input.js?v=20260418-polish-pass2';
+import { Player } from './player.js?v=20260418-singularity';
 import { Camera } from './camera.js?v=20260414-no-bridge-pass2';
-import { World } from './world.js?v=20260416-realm-split';
-import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260416-frontier-rusher-archer-goliath';
-import { Elara } from './npc.js?v=20260414-no-bridge-pass2';
+import { World } from './world.js?v=20260425-sidequests';
+import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260418-polish-pass2';
+import { Elara, Boatman, AmbientNpc } from './npc.js?v=20260425-sidequests';
+import { Boat } from './boat.js?v=20260418-polish-pass2';
 import { Tombstone } from './tombstone.js?v=20260414-tombstone-anim';
 import { Portal } from './portal.js?v=20260414-desert-enemies';
 import { TreasureChest } from './treasureChest.js?v=20260415-level-up-chest';
 import { Pillar } from './pillar.js?v=20260416-pillars-boss';
 import { LoreStone, BuffShrine, CrystalCluster } from './exploration.js?v=20260416-openworld';
+import { AetherFont } from './aetherFont.js?v=20260418-aether-font';
+import { Mnemoforge } from './mnemoforge.js?v=20260418-singularity';
 import {
     MAX_PLAYER_LEVEL,
     SKILLS,
     SKILL_BY_ID,
     SKILL_COLUMNS,
     xpToNextLevel,
-} from './player.js?v=20260415-skilltree-ui';
+} from './player.js?v=20260418-singularity';
 
 const DIALOG_SOUND_DURATION = 1.8; // seconds of text sound per line
 const CHECKPOINTS_KEY = 'zendoria-checkpoints-v1';
@@ -218,10 +221,140 @@ export class Game {
     run() {
         this.lastTime = performance.now();
         this._attemptTitleVoiceAutoplay();
+        this._setupAdminPanel();
         requestAnimationFrame((time) => this._loop(time));
     }
 
+    _setupAdminPanel() {
+        const panel = document.querySelector('[data-admin-panel]');
+        if (!panel) return;
+        this.adminPanel = panel;
+        const closeBtn = panel.querySelector('[data-admin-close]');
+        if (closeBtn) closeBtn.addEventListener('click', () => panel.classList.add('hidden'));
+        const buttons = panel.querySelectorAll('[data-admin-action]');
+        buttons.forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const action = btn.getAttribute('data-admin-action');
+                this._runAdminAction(action);
+            });
+        });
+        window.addEventListener('keydown', (event) => {
+            if (event.code === 'Backquote') {
+                event.preventDefault();
+                panel.classList.toggle('hidden');
+            }
+        });
+    }
+
+    _runAdminAction(action) {
+        if (!this.player) return;
+        const cheats = {
+            maxLevel: () => {
+                const target = MAX_PLAYER_LEVEL;
+                while (this.player.level < target) {
+                    const need = this.player.xpToNext - this.player.xp;
+                    this._awardXp(Math.max(1, need), this.player.cx, this.player.cy - 12);
+                }
+                this.toast = `LEVEL MAX (${target}) GRANTED`;
+                this.toastTimer = 2.4;
+            },
+            addSkillPoints: () => {
+                this.player.skillPoints += 10;
+                this.toast = '+10 SKILL POINTS';
+                this.toastTimer = 1.8;
+            },
+            grantRelic: () => {
+                this.hasLevelUpAbility = true;
+                this.goliathsUnlocked = true;
+                if (this.player.skillPoints < 1) this.player.skillPoints = Math.max(this.player.skillPoints, 1);
+                this.toast = 'SUNKEN RELIC GRANTED';
+                this.toastTimer = 1.8;
+            },
+            grantMap: () => {
+                this.hasMap = true;
+                this.toast = 'WORLD MAP GRANTED · M TO OPEN';
+                this.toastTimer = 1.8;
+            },
+            defeatSandworm: () => {
+                this.bossDefeated.sandworm = true;
+                if (this.sandwormBoss) {
+                    this.sandwormBoss.health = 0;
+                    this.sandwormBoss.state = 'dead';
+                }
+                this.toast = 'SANDWORM MARKED DEFEATED';
+                this.toastTimer = 1.8;
+            },
+            grantBoat: () => {
+                this.bossDefeated.sandworm = true;
+                this._grantBoat();
+            },
+            healFull: () => {
+                this.player.health = this.player.maxHealth;
+                this.toast = 'FULL HEAL';
+                this.toastTimer = 1.4;
+            },
+            killAllEnemies: () => {
+                let n = 0;
+                for (const e of this.enemies) {
+                    if (e.isAlive && e.isAlive()) {
+                        e.health = 0;
+                        e.state = 'dead';
+                        this._recordEnemySlain(e);
+                        n++;
+                    }
+                }
+                this.toast = `KILLED ${n} ENEMIES`;
+                this.toastTimer = 1.6;
+            },
+            teleportBoatman: () => {
+                if (!this.boatman) return;
+                if (!this._placePlayerNear(this.boatman)) {
+                    this.toast = 'NO ROOM NEAR BOATMAN';
+                    this.toastTimer = 1.6;
+                }
+            },
+            teleportBoat: () => {
+                const target = this.boat || (this.world && this.world.boatSpawn ? { x: this.world.boatSpawn.x, y: this.world.boatSpawn.y, w: 28, h: 20 } : null);
+                if (!target) return;
+                if (!this._placePlayerNear(target)) {
+                    this.toast = 'NO ROOM NEAR BOAT';
+                    this.toastTimer = 1.6;
+                }
+            },
+            teleportNextNpc: () => {
+                if (!this.npcs || !this.npcs.length) return;
+                const current = typeof this.adminNpcTeleportIndex === 'number' ? this.adminNpcTeleportIndex : -1;
+                this.adminNpcTeleportIndex = (current + 1) % this.npcs.length;
+                const target = this.npcs[this.adminNpcTeleportIndex];
+                if (!this._placePlayerNear(target)) {
+                    this.toast = `NO ROOM NEAR ${target.name.toUpperCase()}`;
+                    this.toastTimer = 1.6;
+                    return;
+                }
+                this.toast = `TELEPORTED TO ${target.name.toUpperCase()}`;
+                this.toastTimer = 1.6;
+            },
+            grantAll: () => {
+                this._runAdminAction('defeatSandworm');
+                this._runAdminAction('grantRelic');
+                this._runAdminAction('grantMap');
+                this._runAdminAction('grantBoat');
+                this._runAdminAction('addSkillPoints');
+                this._runAdminAction('maxLevel');
+                this._runAdminAction('healFull');
+                this.toast = 'ALL CHEATS APPLIED';
+                this.toastTimer = 2.4;
+            },
+        };
+        const fn = cheats[action];
+        if (fn) {
+            fn();
+            this._refreshEntityColliders();
+        }
+    }
+
     _setupGestureUnlock() {
+        let unlocked = false;
         const unlock = () => {
             if (this.audioCtx && this.audioCtx.state === 'suspended') {
                 this.audioCtx.resume().catch(() => {});
@@ -236,6 +369,13 @@ export class Game {
                 this.settings.soundEnabled
             ) {
                 this._startTitleVoice(true);
+            }
+            if (!unlocked) {
+                unlocked = true;
+                // First gesture has fired — unsubscribe so we don't re-trigger
+                // title music/voice on every subsequent click or keypress.
+                window.removeEventListener('keydown', unlock);
+                window.removeEventListener('pointerdown', unlock);
             }
         };
         window.addEventListener('keydown', unlock);
@@ -271,6 +411,23 @@ export class Game {
     }
 
     _loop(now) {
+        try {
+            this._loopInner(now);
+        } catch (err) {
+            // Surface the failure but keep the rAF chain alive so a single bad
+            // frame doesn't black-screen the game.
+            console.error('Zendoria: frame error', err);
+            this._loopErrorCount = (this._loopErrorCount || 0) + 1;
+            if (this._loopErrorCount > 30) {
+                console.error('Zendoria: too many frame errors, halting loop.');
+                return;
+            }
+            try { this.input?.endFrame(); } catch (_) { /* ignore */ }
+            requestAnimationFrame((time) => this._loop(time));
+        }
+    }
+
+    _loopInner(now) {
         const dt = Math.min((now - this.lastTime) / 1000, 0.05);
         this.lastTime = now;
 
@@ -340,11 +497,19 @@ export class Game {
         this.enemies = [];
         this.enemySpawnNodes = [];
         this.elara = null;
+        this.boatman = null;
+        this.npcs = [];
+        this.boat = null;
+        this.ridingBoat = false;
+        this.hasTalkedToBoatman = false;
+        this.hasBoat = false;
         this.tombstone = null;
         this.treasureChest = null;
         this.pillars = [];
         this.loreStones = [];
         this.shrines = [];
+        this.aetherFonts = [];
+        this.mnemoforges = [];
         this.crystals = [];
         this.activeLoreReadout = null;
         this.sandwormBoss = null;
@@ -356,12 +521,23 @@ export class Game {
         this.bossDefeated = { sandworm: false };
         this.gameTime = 0;
         this.screenShake = 0;
+
+        // Ouroboros Tremor — ambient world-event. Every ~2–5 minutes the
+        // World-Coil Wormp stirs, the ground shudders, and Boneglass shards
+        // surface briefly for the player to harvest.
+        // Cadence is intentionally loose so players never time it.
+        this.ouroborosNextTremor = this._rollOuroborosInterval(90); // first one 1.5–2.5 min in
+        this.ouroborosTremorTimer = 0;       // shake duration currently active
+        this.ouroborosTremorMax = 1.8;        // seconds the full tremor lasts
+        this.boneglassShards = [];            // [{x,y,life,maxLife,vy,phase}]
+
         this.objectiveTimer = 8;
         this.toast = '';
         this.toastTimer = 0;
         this.hasReachedCanyons = false;
         this.hasReachedSaltFlats = false;
         this.hasReachedTropics = false;
+        this.enemyKillCounts = { total: 0, kinds: {}, biomes: {} };
         this.saveTimer = 0;
 
         this.hasMap = false;
@@ -371,6 +547,7 @@ export class Game {
 
         this.worldMapCache = null;
         this.worldMapOpen = false;
+        this.worldMapMode = 'relative';
         this.deathState = null;
 
         this.xpPopups = [];
@@ -404,6 +581,9 @@ export class Game {
     _refreshEntityColliders() {
         const colliders = [];
         if (this.elara) colliders.push(this.elara.getCollider());
+        if (this.boatman) colliders.push(this.boatman.getCollider());
+        for (const npc of (this.npcs || [])) colliders.push(npc.getCollider());
+        if (this.boat && !this.ridingBoat) colliders.push(this.boat.getCollider());
         if (this.tombstone) colliders.push(this.tombstone.getCollider());
         if (this.treasureChest) colliders.push(this.treasureChest.getCollider());
         if (this.pillars) {
@@ -414,6 +594,14 @@ export class Game {
         }
         for (const stone of this.loreStones) colliders.push(stone.getCollider());
         for (const shrine of this.shrines) colliders.push(shrine.getCollider());
+        for (const font of (this.aetherFonts || [])) {
+            const c = font.getCollider();
+            if (c) colliders.push(c);
+        }
+        for (const altar of (this.mnemoforges || [])) {
+            const c = altar.getCollider();
+            if (c) colliders.push(c);
+        }
         for (const crystal of this.crystals) {
             const c = crystal.getCollider();
             if (c) colliders.push(c);
@@ -494,6 +682,24 @@ export class Game {
         return enemy;
     }
 
+    _spawnAmbientNpc(definition, savedState = null) {
+        const npc = new AmbientNpc(definition, this.assets, savedState);
+        const collider = npc.getCollider();
+        const resolved = this.world.findOpenEntityPosition(
+            npc.x,
+            npc.y,
+            collider.x - npc.x,
+            collider.y - npc.y,
+            collider.w,
+            collider.h,
+            48,
+            8,
+        );
+        npc.x = resolved.x;
+        npc.y = resolved.y;
+        return npc;
+    }
+
     _allPillarsDestroyed() {
         return this.pillars.length > 0 && this.pillars.every((p) => p.destroyed);
     }
@@ -548,6 +754,7 @@ export class Game {
                 this._playBeep(960, 0.2, 'triangle', 0.22);
                 this._playBeep(1280, 0.3, 'sine', 0.16);
                 this.bossDefeated.sandworm = true;
+                this._recordEnemySlain(this.sandwormBoss);
                 // Big XP payout on kill.
                 if (this.hasLevelUpAbility && this.sandwormBoss) {
                     this._awardXp(400, this.sandwormBoss.cx, this.sandwormBoss.cy - 10);
@@ -634,6 +841,37 @@ export class Game {
         return this.enemySpawnNodes.map((node) => ({ ...node }));
     }
 
+    _normalizeEnemyKillCounts(source = null) {
+        const cleanBucket = (bucket) => {
+            const next = {};
+            if (!bucket || typeof bucket !== 'object') return next;
+            for (const [key, value] of Object.entries(bucket)) {
+                const count = Math.max(0, Math.floor(Number(value) || 0));
+                if (count > 0) next[key] = count;
+            }
+            return next;
+        };
+        return {
+            total: Math.max(0, Math.floor(Number(source?.total) || 0)),
+            kinds: cleanBucket(source?.kinds),
+            biomes: cleanBucket(source?.biomes),
+        };
+    }
+
+    _recordEnemySlain(enemy) {
+        if (!enemy || enemy._questKillRecorded) return;
+        enemy._questKillRecorded = true;
+        if (!this.enemyKillCounts) this.enemyKillCounts = { total: 0, kinds: {}, biomes: {} };
+        const kind = normalizeEnemyKind(enemy.kind || 'unknown');
+        this.enemyKillCounts.total = (this.enemyKillCounts.total || 0) + 1;
+        this.enemyKillCounts.kinds[kind] = (this.enemyKillCounts.kinds[kind] || 0) + 1;
+        if (this.world && Number.isFinite(enemy.cx) && Number.isFinite(enemy.cy)) {
+            const biome = this.world.getBiomeKeyAt(Math.floor(enemy.cx / TILE), Math.floor(enemy.cy / TILE));
+            this.enemyKillCounts.biomes[biome] = (this.enemyKillCounts.biomes[biome] || 0) + 1;
+        }
+        this.player?.onEnemySlain?.();
+    }
+
     _storeCurrentRealmState() {
         if (!this.currentRealmId) return;
 
@@ -642,9 +880,53 @@ export class Game {
             enemySpawnNodes: this._serializeSpawnNodes(),
             pillars: (this.pillars || []).map((p) => p.stage),
             loreRead: (this.loreStones || []).map((s) => s.read),
+            npcStates: Object.fromEntries((this.npcs || []).map((npc) => [npc.id, npc.serializeState()])),
             crystalsDestroyed: (this.crystals || []).map((c) => c.destroyed),
             shrineCooldowns: (this.shrines || []).map((s) => s.cooldown),
+            aetherFontCooldowns: (this.aetherFonts || []).map((f) => f.cooldown),
+            mnemoforgeUsed: (this.mnemoforges || []).map((m) => m.used),
+            boat: this.boat ? { x: this.boat.x, y: this.boat.y, ridden: !!(this.ridingBoat || this.boat.ridden) } : null,
+            fogMaskPacked: this._encodeFogMask(),
         };
+    }
+
+    _savedNpcStateFor(savedStates, definition, index) {
+        if (!savedStates || !definition) return null;
+        if (!Array.isArray(savedStates) && typeof savedStates === 'object') {
+            return savedStates[definition.id] || null;
+        }
+        const legacy = Array.isArray(savedStates) ? savedStates[index] : null;
+        if (!legacy || (legacy.id && legacy.id !== definition.id)) return null;
+        return legacy;
+    }
+
+    // --- Fog-of-War bitpack helpers (Loop Item #17) -------------------------
+    // We keep the mask as a flat Uint8Array (1 byte per tile, 0=unseen, 1=seen)
+    // in memory for cheap gradient rendering. For save we bit-pack 8 tiles per
+    // byte and base64-encode so the per-realm payload is ~bits/8 bytes.
+    _encodeFogMask() {
+        const mask = this.fogMask;
+        if (!mask || !mask.length) return null;
+        const byteLen = Math.ceil(mask.length / 8);
+        const packed = new Uint8Array(byteLen);
+        for (let i = 0; i < mask.length; i++) {
+            if (mask[i]) packed[i >> 3] |= (1 << (i & 7));
+        }
+        let bin = '';
+        for (let i = 0; i < packed.length; i++) bin += String.fromCharCode(packed[i]);
+        try { return btoa(bin); } catch (e) { return null; }
+    }
+
+    _decodeFogMask(base64, expectedLen) {
+        if (!base64 || !expectedLen) return null;
+        let bin;
+        try { bin = atob(base64); } catch (e) { return null; }
+        const mask = new Uint8Array(expectedLen);
+        for (let i = 0; i < expectedLen; i++) {
+            const byte = bin.charCodeAt(i >> 3) || 0;
+            mask[i] = (byte & (1 << (i & 7))) ? 1 : 0;
+        }
+        return mask;
     }
 
     _loadRealm(realmId, arrivalKey = 'start', options = {}) {
@@ -663,7 +945,13 @@ export class Game {
         this.currentRealmId = this.world.realmId;
         this.worldMapCache = null;
 
-        const arrival = playerOverride || this.world.getArrivalPoint(arrivalKey);
+        let arrival = playerOverride || this.world.getArrivalPoint(arrivalKey);
+        if (!arrival || typeof arrival.x !== 'number' || typeof arrival.y !== 'number'
+            || !Number.isFinite(arrival.x) || !Number.isFinite(arrival.y)) {
+            // Bad arrival point — fall back to the realm's player spawn or origin.
+            arrival = this.world.playerSpawn || { x: 64, y: 64 };
+            console.warn('Zendoria: bad arrival point; falling back to player spawn');
+        }
         if (!this.player || createPlayer) {
             this.player = new Player(arrival.x, arrival.y, this.assets);
         } else {
@@ -675,6 +963,19 @@ export class Game {
         this.elara = this.world.elaraSpawn
             ? new Elara(this.world.elaraSpawn.x, this.world.elaraSpawn.y, this.assets)
             : null;
+        this.boatman = this.world.boatmanSpawn
+            ? new Boatman(this.world.boatmanSpawn.x, this.world.boatmanSpawn.y, this.assets)
+            : null;
+        const savedBoat = forceFresh ? null : this.realmStates[this.currentRealmId]?.boat;
+        if (this.hasBoat && this.world.boatSpawn) {
+            const bx = savedBoat?.x ?? this.world.boatSpawn.x;
+            const by = savedBoat?.y ?? this.world.boatSpawn.y;
+            this.boat = new Boat(bx, by, this.assets);
+            this.boat.ridden = !!savedBoat?.ridden;
+        } else {
+            this.boat = null;
+        }
+        this.ridingBoat = !!this.boat && this.boat.ridden;
         this.tombstone = this.world.tombstoneSpawn
             ? new Tombstone(this.world.tombstoneSpawn.x, this.world.tombstoneSpawn.y, this.assets.tombstoneSheet)
             : null;
@@ -693,6 +994,7 @@ export class Game {
         const savedEnemies = savedRealmState?.enemies;
         const savedSpawnNodes = savedRealmState?.enemySpawnNodes;
         const savedPillars = savedRealmState?.pillars;
+        const savedNpcStates = savedRealmState?.npcStates;
 
         this.pillars = (this.world.pillarSpawns || []).map((def, index) => {
             const savedStage = Array.isArray(savedPillars) ? (savedPillars[index] || 0) : 0;
@@ -702,6 +1004,8 @@ export class Game {
         const savedLoreRead = savedRealmState?.loreRead;
         const savedCrystalsDestroyed = savedRealmState?.crystalsDestroyed;
         const savedShrineCooldowns = savedRealmState?.shrineCooldowns;
+        const savedAetherFontCooldowns = savedRealmState?.aetherFontCooldowns;
+        const savedMnemoforgeUsed = savedRealmState?.mnemoforgeUsed;
         this.loreStones = (this.world.loreStoneSpawns || []).map((def, index) => {
             const stone = new LoreStone(def);
             if (Array.isArray(savedLoreRead) && savedLoreRead[index]) stone.setRead(true);
@@ -713,11 +1017,69 @@ export class Game {
             if (saved > 0) shrine.cooldown = saved;
             return shrine;
         });
+        this.aetherFonts = (this.world.aetherFontSpawns || []).map((def, index) => {
+            const font = new AetherFont(def);
+            const saved = Array.isArray(savedAetherFontCooldowns) ? savedAetherFontCooldowns[index] : 0;
+            if (saved > 0) font.cooldown = saved;
+            return font;
+        });
+        this.mnemoforges = (this.world.mnemoforgeSpawns || []).map((def, index) => {
+            const altar = new Mnemoforge(def);
+            if (Array.isArray(savedMnemoforgeUsed) && savedMnemoforgeUsed[index]) altar.used = true;
+            return altar;
+        });
         this.crystals = (this.world.crystalSpawns || []).map((def, index) => {
             const wasDestroyed = Array.isArray(savedCrystalsDestroyed) ? savedCrystalsDestroyed[index] : false;
             return new CrystalCluster(def, wasDestroyed);
         });
+        const stagingColliders = [];
+        if (this.elara) stagingColliders.push(this.elara.getCollider());
+        if (this.boatman) stagingColliders.push(this.boatman.getCollider());
+        if (this.boat && !this.ridingBoat) stagingColliders.push(this.boat.getCollider());
+        if (this.tombstone) stagingColliders.push(this.tombstone.getCollider());
+        if (this.treasureChest) stagingColliders.push(this.treasureChest.getCollider());
+        for (const pillar of this.pillars) {
+            const c = pillar.getCollider();
+            if (c) stagingColliders.push(c);
+        }
+        for (const stone of this.loreStones) stagingColliders.push(stone.getCollider());
+        for (const shrine of this.shrines) stagingColliders.push(shrine.getCollider());
+        for (const font of (this.aetherFonts || [])) {
+            const c = font.getCollider();
+            if (c) stagingColliders.push(c);
+        }
+        for (const altar of (this.mnemoforges || [])) {
+            const c = altar.getCollider();
+            if (c) stagingColliders.push(c);
+        }
+        for (const crystal of this.crystals) {
+            const c = crystal.getCollider();
+            if (c) stagingColliders.push(c);
+        }
+        for (const portal of (this.portals || [])) {
+            if (portal.getCollider) stagingColliders.push(portal.getCollider());
+        }
+        this.world.setEntityColliders(stagingColliders);
+        this.npcs = (this.world.npcSpawns || []).map((definition, index) => {
+            const saved = this._savedNpcStateFor(savedNpcStates, definition, index);
+            const npc = this._spawnAmbientNpc(definition, saved);
+            stagingColliders.push(npc.getCollider());
+            this.world.setEntityColliders(stagingColliders);
+            return npc;
+        });
         this.activeLoreReadout = null;
+        // Boneglass shards are realm-local and ephemeral — drop any leftovers on realm swap.
+        this.boneglassShards = [];
+        this.ouroborosTremorTimer = 0;
+        // Fog-of-War: restore the explored mask for this realm, or start blank.
+        const tileCount = this.world.cols * this.world.rows;
+        const restoredMask = forceFresh ? null : this._decodeFogMask(savedRealmState?.fogMaskPacked, tileCount);
+        this.fogMask = restoredMask || new Uint8Array(tileCount);
+        this.fogReveal = new Float32Array(tileCount); // ephemeral pulse on newly-seen tiles
+        // Reset interpolation anchor — prevents a reveal-streak from the old realm's
+        // last player position on the first frame in the new realm.
+        this._fogLastX = null;
+        this._fogLastY = null;
 
         this.enemies = this._createEnemies(savedEnemies ?? null);
         if (Array.isArray(savedSpawnNodes) && savedSpawnNodes.length === this.world.enemySpawnNodes.length) {
@@ -735,6 +1097,26 @@ export class Game {
         }
 
         this._refreshEntityColliders();
+        // If the spawn we computed lands inside terrain or a collider (e.g. on top
+        // of a freshly-spawned NPC), spiral outward until we find a free tile.
+        if (!this._isPlayerSpotClear(this.player.x, this.player.y, this.ridingBoat)) {
+            const safe = { x: this.player.x, y: this.player.y };
+            let placed = false;
+            for (let r = 1; r <= 12 && !placed; r++) {
+                for (let dy = -r; dy <= r && !placed; dy++) {
+                    for (let dx = -r; dx <= r && !placed; dx++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                        const nx = safe.x + dx * 8;
+                        const ny = safe.y + dy * 8;
+                        if (this._isPlayerSpotClear(nx, ny, this.ridingBoat)) {
+                            this.player.x = nx;
+                            this.player.y = ny;
+                            placed = true;
+                        }
+                    }
+                }
+            }
+        }
         this.camera.snap(this.player, this.world.pixelW, this.world.pixelH);
     }
 
@@ -1035,6 +1417,8 @@ export class Game {
         this.paused = true;
         this.pauseMenuIndex = 0;
         if (this.pauseOverlay) this.pauseOverlay.classList.remove('hidden');
+        // Drop any inputs in flight so the player doesn't keep walking after pausing.
+        if (this.input && typeof this.input.clearAll === 'function') this.input.clearAll();
         this._syncPauseMenu();
     }
 
@@ -1044,6 +1428,8 @@ export class Game {
         if (this.controlsPanel) this.controlsPanel.classList.add('hidden');
         if (this.pauseSettingsPanel) this.pauseSettingsPanel.classList.remove('hidden');
         if (this.pauseOverlay) this.pauseOverlay.classList.add('hidden');
+        // Same idea: don't fire actions queued during the pause-menu interactions.
+        if (this.input && typeof this.input.clearAll === 'function') this.input.clearAll();
         this._syncPauseMenu();
     }
 
@@ -1217,8 +1603,21 @@ export class Game {
         this.hasReachedSaltFlats = !!save.hasReachedSaltFlats || legacyScoutProgress || !!save.hasLevelUpAbility;
         this.hasReachedTropics = !!save.hasReachedTropics || !!save.hasLevelUpAbility;
         this.hasTalkedToElara = !!save.hasTalkedToElara;
+        this.hasTalkedToBoatman = !!save.hasTalkedToBoatman;
+        this.enemyKillCounts = this._normalizeEnemyKillCounts(save.enemyKillCounts);
         this.hasMap = !!save.hasMap;
+        // hasBoat MUST be restored BEFORE _loadRealm runs — _loadRealm only
+        // constructs the Boat entity when hasBoat is true.
+        this.hasBoat = !!save.hasBoat;
         this.hasLevelUpAbility = !!save.hasLevelUpAbility;
+        // bossDefeated drives skill-tree gating and the Boatman dialog branch.
+        // Losing it means a post-sandworm save reloads into pre-sandworm state.
+        this.bossDefeated = (save.bossDefeated && typeof save.bossDefeated === 'object')
+            ? { sandworm: !!save.bossDefeated.sandworm }
+            : { sandworm: false };
+        // If the player had the boat, they must have beaten the worm at some
+        // point — fold that implication in for saves made before this fix landed.
+        if (this.hasBoat) this.bossDefeated.sandworm = true;
         this.goliathsUnlocked = this.hasLevelUpAbility;
         this.goliathUnlockTimer = 0;
         this.realmStates = {};
@@ -1227,14 +1626,18 @@ export class Game {
             const frontierState = save.realmStates.frontier || save.realmStates.index;
             if (driftmereState) {
                 this.realmStates.driftmere = {
+                    ...driftmereState,
                     enemies: Array.isArray(driftmereState.enemies) ? driftmereState.enemies : [],
                     enemySpawnNodes: Array.isArray(driftmereState.enemySpawnNodes) ? driftmereState.enemySpawnNodes : [],
+                    npcStates: (driftmereState.npcStates && typeof driftmereState.npcStates === 'object') ? driftmereState.npcStates : {},
                 };
             }
             if (frontierState) {
                 this.realmStates.frontier = {
+                    ...frontierState,
                     enemies: Array.isArray(frontierState.enemies) ? frontierState.enemies : [],
                     enemySpawnNodes: Array.isArray(frontierState.enemySpawnNodes) ? frontierState.enemySpawnNodes : [],
+                    npcStates: (frontierState.npcStates && typeof frontierState.npcStates === 'object') ? frontierState.npcStates : {},
                 };
             }
         }
@@ -1242,6 +1645,7 @@ export class Game {
             this.realmStates[this.currentRealmId] = {
                 enemies: save.enemies,
                 enemySpawnNodes: [],
+                npcStates: [],
             };
         }
 
@@ -1298,11 +1702,17 @@ export class Game {
 
     _update(dt) {
         if (this.elara) this.elara.update(dt);
+        if (this.boatman) this.boatman.update(dt);
+        for (const npc of (this.npcs || [])) npc.update(dt);
+        if (this.boat) this.boat.update(dt);
         for (const portal of this.portals) portal.update(dt);
         if (this.treasureChest) this.treasureChest.update(dt);
         for (const pillar of this.pillars) pillar.update(dt);
         for (const stone of this.loreStones) stone.update(dt);
         for (const shrine of this.shrines) shrine.update(dt);
+        for (const font of (this.aetherFonts || [])) font.update(dt);
+        for (const altar of (this.mnemoforges || [])) altar.update(dt);
+        this._updateOuroborosTremor(dt);
         for (const crystal of this.crystals) crystal.update(dt);
 
         // Dialog / reward popup freezes the world
@@ -1326,7 +1736,13 @@ export class Game {
         }
 
         this.player.healingBlocked = this.bossState === 'preparing' || this.bossState === 'fighting';
+        this.player.collisionMode = this.ridingBoat ? 'boat' : 'walker';
         this.player.update(dt, this.input, this.world);
+        this._updateFogOfWar(dt);
+        if (this.ridingBoat && this.boat) {
+            this.boat.x = this.player.x + 2;
+            this.boat.y = this.player.y + 21;
+        }
         if (this.tombstone) this.tombstone.update(dt);
 
         // Play the sword slash SFX the moment the player starts a swing.
@@ -1468,6 +1884,578 @@ export class Game {
         return rectsOverlap(pr, r);
     }
 
+    _playerNearBoatman() {
+        if (!this.boatman) return false;
+        return rectsOverlap(this.player.getHitbox(), this.boatman.getInteractRect());
+    }
+
+    _getNearbyNpc() {
+        if (!this.player || !this.npcs || !this.npcs.length) return null;
+        const hitbox = this.player.getHitbox();
+        let best = null;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (const npc of this.npcs) {
+            if (!rectsOverlap(hitbox, npc.getInteractRect())) continue;
+            const dx = npc.cx - this.player.cx;
+            const dy = npc.cy - this.player.cy;
+            const dist = dx * dx + dy * dy;
+            if (dist < bestDist) {
+                best = npc;
+                bestDist = dist;
+            }
+        }
+        return best;
+    }
+
+    _getReadyQuestNpc() {
+        if (!this.npcs || !this.npcs.length) return null;
+        return this.npcs.find((npc) => this._npcQuestState(npc) === 'ready') || null;
+    }
+
+    _getTrackedSideQuestNpc() {
+        const ready = this._getReadyQuestNpc();
+        if (ready) return ready;
+        if (!this.npcs || !this.npcs.length) return null;
+        return this.npcs.find((npc) => this._npcQuestState(npc) === 'active' && npc.visits > 0) || null;
+    }
+
+    _npcInteractLabel(npc) {
+        const questState = this._npcQuestState(npc);
+        if (questState === 'ready') return `E: TURN IN TO ${npc.promptLabel}`;
+        if (questState === 'active' && npc.visits > 0) {
+            const progress = this._npcQuestProgress(npc.effect || {});
+            return `E: ${npc.promptLabel} ${progress.text}`;
+        }
+        return `E: TALK TO ${npc.promptLabel}`;
+    }
+
+    _playerNearBoat() {
+        if (!this.boat || this.ridingBoat) return false;
+        return rectsOverlap(this.player.getHitbox(), this.boat.getInteractRect());
+    }
+
+    _tryToggleBoat() {
+        if (this.ridingBoat) {
+            return this._tryDismountBoat();
+        }
+        if (this._playerNearBoat()) {
+            this._mountBoat();
+            return true;
+        }
+        return false;
+    }
+
+    _mountBoat() {
+        if (!this.boat) return;
+        this.ridingBoat = true;
+        this.boat.ridden = true;
+        this.player.x = this.boat.x - 2;
+        this.player.y = this.boat.y - 21;
+        this.toast = 'BOARDED THE ROWBOAT · E TO DISMOUNT';
+        this.toastTimer = 2.2;
+        this._playBeep(620, 0.08, 'triangle', 0.12);
+        this._refreshEntityColliders();
+    }
+
+    _tryDismountBoat() {
+        if (!this.boat || !this.ridingBoat) return false;
+        // Search outward in a spiral for a clear walker-collision tile that is land (tile > 1).
+        // IMPORTANT: only accept a landing spot from which the player could re-board —
+        // i.e. their hitbox at that spot still overlaps the boat's interact rect.
+        // Otherwise the player can step ashore too far out and get stranded on land.
+        const TILE_PX = 16;
+        const cx = this.boat.x + this.boat.w / 2;
+        const cy = this.boat.y + this.boat.h / 2;
+        const baseCol = Math.floor(cx / TILE_PX);
+        const baseRow = Math.floor(cy / TILE_PX);
+        const boardRect = this.boat.getInteractRect();
+        const hb = this.player.hitbox;
+        for (let radius = 1; radius <= 3; radius++) {
+            for (let dr = -radius; dr <= radius; dr++) {
+                for (let dc = -radius; dc <= radius; dc++) {
+                    if (Math.max(Math.abs(dr), Math.abs(dc)) !== radius) continue;
+                    const col = baseCol + dc;
+                    const row = baseRow + dr;
+                    const tile = this.world.tileAt(col, row);
+                    if (tile <= 1) continue; // skip water
+                    const px = col * TILE_PX - hb.ox; // center hitbox on tile
+                    const py = row * TILE_PX - hb.oy + 3;
+                    // Re-board reachability check: the landed hitbox must still
+                    // intersect the boat's interact rect so the player isn't stranded.
+                    const landedHitbox = {
+                        x: px + hb.ox,
+                        y: py + hb.oy,
+                        w: hb.w,
+                        h: hb.h,
+                    };
+                    if (!rectsOverlap(landedHitbox, boardRect)) continue;
+                    if (this._isPlayerSpotClear(px, py, true)) {
+                        this.player.x = px;
+                        this.player.y = py;
+                        this.player.collisionMode = 'walker';
+                        this.ridingBoat = false;
+                        this.boat.ridden = false;
+                        this.toast = 'STEPPED ASHORE';
+                        this.toastTimer = 1.6;
+                        this._playBeep(520, 0.08, 'triangle', 0.12);
+                        this._refreshEntityColliders();
+                        return true;
+                    }
+                }
+            }
+        }
+        this.toast = 'PADDLE CLOSER TO SHORE';
+        this.toastTimer = 1.4;
+        this._playBeep(280, 0.08, 'square', 0.1);
+        return false;
+    }
+
+    // Test whether the player's hitbox at (px, py) overlaps any collider/solid tile.
+    // When ignoreBoat is true, the boat's collider is excluded (used during dismount).
+    _isPlayerSpotClear(px, py, ignoreBoat = false) {
+        const ox = 11, oy = 26, w = 10, h = 10;
+        const hx = px + ox;
+        const hy = py + oy;
+        if (this.world.collides(hx, hy, w, h, 'walker')) {
+            // collides() checks both tiles AND entity colliders. If ignoreBoat, recheck excluding boat.
+            if (!ignoreBoat) return false;
+        } else {
+            return true;
+        }
+        // Re-check tiles only.
+        const c0 = Math.floor(hx / 16);
+        const r0 = Math.floor(hy / 16);
+        const c1 = Math.floor((hx + w - 1) / 16);
+        const r1 = Math.floor((hy + h - 1) / 16);
+        for (let r = r0; r <= r1; r++) {
+            for (let c = c0; c <= c1; c++) {
+                const t = this.world.tileAt(c, r);
+                if (t === 0 || t === 1 || t === 6 || t === 7 || t === 8) return false;
+            }
+        }
+        // Check entity colliders, optionally skipping the boat.
+        const rect = { x: hx, y: hy, w, h };
+        for (const ec of this.world.entityColliders) {
+            if (ignoreBoat && this.boat && ec.x === Math.round(this.boat.x + 4) && ec.y === Math.round(this.boat.y + this.boat.h - 6)) continue;
+            if (rect.x < ec.x + ec.w && rect.x + rect.w > ec.x && rect.y < ec.y + ec.h && rect.y + rect.h > ec.y) return false;
+        }
+        for (const pc of this.world.propColliders) {
+            if (rect.x < pc.x + pc.w && rect.x + rect.w > pc.x && rect.y < pc.y + pc.h && rect.y + rect.h > pc.y) return false;
+        }
+        return true;
+    }
+
+    // Safely place the player near a target (entity with x,y[,w,h]) by spiraling outward
+    // until a hitbox-clear spot is found. Used by admin teleports and dismount fallback.
+    _placePlayerNear(target, preferOffsets = null) {
+        if (!target) return false;
+        const TILE_PX = 16;
+        const cx = (target.cx !== undefined) ? target.cx : (target.x + (target.w || 16) / 2);
+        const cy = (target.cy !== undefined) ? target.cy : (target.y + (target.h || 16) / 2);
+        const tries = preferOffsets || [];
+        // Default ring of nearby offsets — try very-close placements first so
+        // the teleport drops the player inside the target's interact rect.
+        if (!tries.length) {
+            for (let radius = 8; radius <= 96; radius += 8) {
+                tries.push({ dx: 0, dy: radius });   // south
+                tries.push({ dx: -radius, dy: 0 });  // west
+                tries.push({ dx: radius, dy: 0 });   // east
+                tries.push({ dx: 0, dy: -radius });  // north
+                tries.push({ dx: -radius, dy: radius });
+                tries.push({ dx: radius, dy: radius });
+                tries.push({ dx: -radius, dy: -radius });
+                tries.push({ dx: radius, dy: -radius });
+            }
+        }
+        for (const off of tries) {
+            const px = Math.round(cx + off.dx - 16); // player width 32 → -16
+            const py = Math.round(cy + off.dy - 32); // player height 40, hitbox at oy=26 → roughly center
+            if (this._isPlayerSpotClear(px, py)) {
+                this.player.x = px;
+                this.player.y = py;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    _openBoatmanDialog() {
+        this.dialog = {
+            kind: 'boatman',
+            images: [this.assets.boatmanDialog1, this.assets.boatmanDialog2, this.assets.boatmanDialog3],
+            index: 0,
+            soundTimer: DIALOG_SOUND_DURATION,
+            grantMapAfter: -1,
+        };
+        // Drop the keypress that opened the dialog so it doesn't immediately
+        // advance to the next page on the same frame.
+        if (this.input) this.input.pressed = {};
+        this._playBeep(600, 0.08, 'triangle', 0.12);
+        this._startTextSound();
+    }
+
+    _grantBoat() {
+        if (this.hasBoat) return;
+        this.hasBoat = true;
+        this.hasTalkedToBoatman = true;
+        if (this.world && this.world.boatSpawn) {
+            this.boat = new Boat(this.world.boatSpawn.x, this.world.boatSpawn.y, this.assets);
+            this.boat.ridden = false;
+            this._refreshEntityColliders();
+        }
+        this.toast = 'ROWBOAT UNLOCKED · E BY THE BOAT TO RIDE';
+        this.toastTimer = 3.2;
+        this._playBeep(880, 0.14, 'triangle', 0.18);
+        this._playBeep(1180, 0.2, 'sine', 0.12);
+    }
+
+    _getDestroyedCrystalCount(requirement = {}) {
+        return (this.crystals || []).filter((crystal) => (
+            crystal.destroyed &&
+            (!requirement.kind || crystal.kind === requirement.kind)
+        )).length;
+    }
+
+    _getEnemyKillCount(requirement = {}) {
+        const counts = this.enemyKillCounts || { total: 0, kinds: {}, biomes: {} };
+        if (requirement.kind) return counts.kinds?.[normalizeEnemyKind(requirement.kind)] || 0;
+        if (requirement.biome) return counts.biomes?.[requirement.biome] || 0;
+        return counts.total || 0;
+    }
+
+    _getLoreReadCount() {
+        return (this.loreStones || []).filter((stone) => stone.read).length;
+    }
+
+    _npcQuestProgress(effect = {}) {
+        const requirement = effect.require || {};
+        const entries = [];
+        if (requirement.enemyKills) {
+            const needed = requirement.enemyKills.count || 1;
+            entries.push({
+                current: this._getEnemyKillCount(requirement.enemyKills),
+                needed,
+                label: requirement.enemyKills.label || 'FOES',
+            });
+        }
+        if (requirement.crystals) {
+            const needed = requirement.crystals.count || 1;
+            entries.push({
+                current: this._getDestroyedCrystalCount(requirement.crystals),
+                needed,
+                label: requirement.crystals.label || 'CRYSTALS',
+            });
+        }
+        if (requirement.loreRead) {
+            const needed = requirement.loreRead.count || 1;
+            entries.push({
+                current: this._getLoreReadCount(),
+                needed,
+                label: requirement.loreRead.label || 'MARKERS',
+            });
+        }
+        if (requirement.flags) {
+            for (const [key, label] of Object.entries(requirement.flags)) {
+                entries.push({
+                    current: this._npcQuestFlagMet(key) ? 1 : 0,
+                    needed: 1,
+                    label: label || key.toUpperCase(),
+                });
+            }
+        }
+        const tracked = entries.find((entry) => entry.current < entry.needed) || entries[0] || {
+            current: 0,
+            needed: 1,
+            label: 'TASK',
+        };
+        const current = Math.min(tracked.current, tracked.needed);
+        return {
+            current,
+            needed: tracked.needed,
+            remaining: Math.max(0, tracked.needed - current),
+            label: tracked.label,
+            text: `${current}/${tracked.needed} ${tracked.label}`,
+        };
+    }
+
+    _npcQuestFlagMet(key) {
+        switch (key) {
+            case 'hasMap': return !!this.hasMap;
+            case 'hasBoat': return !!this.hasBoat;
+            case 'hasLevelUpAbility': return !!this.hasLevelUpAbility;
+            case 'hasReachedCanyons': return !!this.hasReachedCanyons;
+            case 'hasReachedSaltFlats': return !!this.hasReachedSaltFlats;
+            case 'hasReachedTropics': return !!this.hasReachedTropics;
+            case 'bossSandworm': return !!this.bossDefeated?.sandworm;
+            case 'allPillarsDestroyed': return this._allPillarsDestroyed();
+            default: return false;
+        }
+    }
+
+    _npcQuestRequirementsMet(requirement = {}) {
+        if (requirement.requireAbility && !this.hasLevelUpAbility) return false;
+        if (requirement.enemyKills && this._getEnemyKillCount(requirement.enemyKills) < (requirement.enemyKills.count || 1)) return false;
+        if (requirement.crystals && this._getDestroyedCrystalCount(requirement.crystals) < (requirement.crystals.count || 1)) return false;
+        if (requirement.loreRead && this._getLoreReadCount() < (requirement.loreRead.count || 1)) return false;
+        if (requirement.flags) {
+            for (const key of Object.keys(requirement.flags)) {
+                if (!this._npcQuestFlagMet(key)) return false;
+            }
+        }
+        return true;
+    }
+
+    _npcQuestState(npc) {
+        const effect = npc?.effect;
+        if (!effect || effect.type !== 'quest') return null;
+        if (effect.once !== false && npc.used) return 'complete';
+        return this._npcQuestRequirementsMet(effect.require || {}) ? 'ready' : 'active';
+    }
+
+    _formatNpcDialogLines(lines, npc) {
+        const progress = this._npcQuestProgress(npc.effect || {});
+        const replacements = {
+            cooldown: Math.max(1, Math.ceil(npc.cooldown)),
+            progress: progress.text,
+            current: progress.current,
+            needed: progress.needed,
+            remaining: progress.remaining,
+        };
+        return (lines || []).map((line) => {
+            let text = String(line || '');
+            for (const [key, value] of Object.entries(replacements)) {
+                text = text.replaceAll(`{${key}}`, value);
+            }
+            return text;
+        });
+    }
+
+    _paginateNpcDialogBody(body) {
+        const maxWidth = 202;
+        const lines = this._wrapPixelText(body, maxWidth);
+        if (lines.length <= 5) return [body];
+        const pages = [];
+        for (let i = 0; i < lines.length; i += 5) {
+            pages.push(lines.slice(i, i + 5).join(' '));
+        }
+        return pages;
+    }
+
+    _buildNpcDialogPages(npc) {
+        const spec = npc.definition.dialog || {};
+        const effect = npc.effect || {};
+        let lines = spec.ready || spec.repeat || ['Stay safe out there.'];
+
+        if (effect.type === 'quest') {
+            const questState = this._npcQuestState(npc);
+            if (questState === 'complete') {
+                lines = spec.used || spec.repeat || spec.ready || lines;
+            } else if (questState === 'ready') {
+                lines = spec.ready || lines;
+            } else if (npc.visits > 0 && spec.repeat) {
+                lines = spec.repeat;
+            } else {
+                lines = spec.active || spec.locked || lines;
+            }
+        } else if (effect.type === 'xp') {
+            if (effect.requireAbility && !this.hasLevelUpAbility) {
+                lines = spec.locked || spec.ready || lines;
+            } else if (npc.used && effect.once) {
+                lines = spec.used || spec.repeat || spec.ready || lines;
+            } else {
+                lines = spec.ready || lines;
+            }
+        } else if ((effect.type === 'heal' || effect.type === 'buff') && npc.cooldown > 0) {
+            lines = spec.cooldown || spec.repeat || spec.ready || lines;
+        } else if (npc.visits > 0 && spec.repeat) {
+            lines = spec.repeat;
+        }
+
+        return this._formatNpcDialogLines(lines, npc).flatMap((body) => (
+            this._paginateNpcDialogBody(body).map((pageBody) => ({
+                speaker: npc.name,
+                title: npc.title,
+                body: pageBody,
+                accent: npc.accent,
+                portrait: npc.portraitFrame,
+            }))
+        ));
+    }
+
+    _openNpcDialog(npc) {
+        if (!npc) return;
+        const pages = this._buildNpcDialogPages(npc);
+        this.dialog = {
+            kind: 'npc',
+            npc,
+            pages,
+            index: 0,
+            soundTimer: DIALOG_SOUND_DURATION,
+            onFinish: () => {
+                npc.markVisited();
+                this._resolveNpcEffect(npc);
+            },
+        };
+        if (this.input) this.input.pressed = {};
+        this._playBeep(620, 0.08, 'triangle', 0.12);
+        this._startTextSound();
+    }
+
+    _grantNpcQuestReward(npc, effect) {
+        const reward = effect.reward || {};
+        const labels = [];
+
+        if (reward.xp > 0) {
+            this._awardXp(reward.xp, npc.cx, npc.y - 8);
+            labels.push(`+${reward.xp} XP`);
+        }
+
+        if (reward.skillPoints > 0 && this.hasLevelUpAbility) {
+            this.player.skillPoints += reward.skillPoints;
+            this.skillHintPulse = 1;
+            labels.push(`+${reward.skillPoints} SKILL`);
+        }
+
+        if (reward.heal) {
+            const amount = reward.heal === 'full'
+                ? this.player.maxHealth - this.player.health
+                : Math.max(0, Number(reward.heal) || 0);
+            if (amount > 0) {
+                this.player.health = Math.min(this.player.maxHealth, this.player.health + amount);
+                this._spawnDamageNumber(this.player.cx, this.player.y - 2, amount, { variant: 'heal' });
+                labels.push(`+${amount} HP`);
+            }
+        }
+
+        if (reward.buffId) {
+            const duration = reward.duration || 45;
+            this.player.grantShrineBuff(reward.buffId, duration);
+            labels.push(`${reward.buffName || reward.buffId.toUpperCase()} ${duration}S`);
+        }
+
+        this.toast = effect.toast || labels.join(' | ') || 'QUEST COMPLETE';
+        this.toastTimer = 2.4;
+        this._playBeep(760, 0.08, 'triangle', 0.14);
+        this._playBeep(1080, 0.14, 'sine', 0.1);
+        this._spawnParticles(npc.cx, npc.y + 2, {
+            count: 22,
+            spread: Math.PI * 2,
+            minSpeed: 28,
+            maxSpeed: 100,
+            friction: 0.9,
+            gravity: -14,
+            life: 0.75,
+            colors: [npc.accent, '#ffffff', reward.color || '#ffe9a8'],
+            size: 2,
+        });
+    }
+
+    _resolveNpcEffect(npc) {
+        const effect = npc?.effect;
+        if (!effect) return;
+
+        if (effect.type === 'heal') {
+            if (this.bossState === 'preparing' || this.bossState === 'fighting') {
+                this.toast = 'NO TIME TO PATCH WOUNDS MID-BATTLE';
+                this.toastTimer = 1.8;
+                this._playBeep(260, 0.08, 'square', 0.08);
+                return;
+            }
+            if (this.player.health >= this.player.maxHealth) {
+                this.toast = 'ALREADY AT FULL HEALTH';
+                this.toastTimer = 1.4;
+                this._playBeep(520, 0.06, 'square', 0.08);
+                return;
+            }
+            this.player.health = this.player.maxHealth;
+            npc.setCooldown(effect.cooldown);
+            this.toast = effect.toast || 'FULL HEAL';
+            this.toastTimer = 2.2;
+            this._playBeep(880, 0.12, 'triangle', 0.14);
+            this._playBeep(1180, 0.16, 'sine', 0.1);
+            this._spawnParticles(this.player.cx, this.player.cy - 6, {
+                count: 14,
+                spread: Math.PI * 2,
+                minSpeed: 24,
+                maxSpeed: 78,
+                friction: 0.9,
+                gravity: -18,
+                life: 0.72,
+                colors: ['#9ef5ff', '#ffffff', '#dfffcf'],
+                size: 2,
+            });
+            return;
+        }
+
+        if (effect.type === 'buff') {
+            if (npc.cooldown > 0) return;
+            this.player.grantShrineBuff(effect.buffId, effect.duration);
+            npc.setCooldown(effect.cooldown);
+            this.toast = `${effect.buffName || effect.buffId.toUpperCase()} Â· ${effect.duration}S`;
+            this.toastTimer = 2.2;
+            this._playBeep(840, 0.1, 'triangle', 0.14);
+            this._playBeep(1120, 0.14, 'sine', 0.1);
+            const color = effect.buffId === 'might'
+                ? '#ffbf7a'
+                : effect.buffId === 'ward'
+                    ? '#a7d7ff'
+                    : '#a3ffd6';
+            this._spawnParticles(npc.cx, npc.y + 4, {
+                count: 18,
+                spread: Math.PI * 2,
+                minSpeed: 28,
+                maxSpeed: 92,
+                friction: 0.9,
+                gravity: -10,
+                life: 0.7,
+                colors: [color, '#ffffff', '#fff7c8'],
+                size: 2,
+            });
+            return;
+        }
+
+        if (effect.type === 'quest') {
+            if (effect.once !== false && npc.used) return;
+            if (!this._npcQuestRequirementsMet(effect.require || {})) {
+                const progress = this._npcQuestProgress(effect);
+                this.toast = effect.progressToast || `${npc.name.toUpperCase()}: ${progress.text}`;
+                this.toastTimer = 2.0;
+                this._playBeep(360, 0.08, 'square', 0.08);
+                return;
+            }
+            this._grantNpcQuestReward(npc, effect);
+            npc.markUsed();
+            return;
+        }
+
+        if (effect.type === 'xp') {
+            if (effect.requireAbility && !this.hasLevelUpAbility) {
+                this.toast = 'CLAIM THE SUNKEN RELIC TO AWAKEN THIS KNOWLEDGE';
+                this.toastTimer = 2.2;
+                this._playBeep(280, 0.08, 'square', 0.08);
+                return;
+            }
+            if (effect.once && npc.used) return;
+            this._awardXp(effect.amount || 0, npc.cx, npc.y - 8);
+            npc.markUsed();
+            this.toast = effect.toast || `+${effect.amount || 0} XP`;
+            this.toastTimer = 2.2;
+            this._playBeep(760, 0.08, 'triangle', 0.14);
+            this._playBeep(1040, 0.12, 'sine', 0.1);
+            this._spawnParticles(npc.cx, npc.y + 2, {
+                count: 16,
+                spread: Math.PI * 2,
+                minSpeed: 26,
+                maxSpeed: 90,
+                friction: 0.9,
+                gravity: -14,
+                life: 0.7,
+                colors: ['#ffe9a8', '#ffcb6a', '#fff6cc'],
+                size: 2,
+            });
+        }
+    }
+
     _playerNearTombstone() {
         if (!this.tombstone) return false;
         return rectsOverlap(this.player.getHitbox(), this.tombstone.getInteractRect());
@@ -1488,8 +2476,29 @@ export class Game {
             this._openElaraDialog();
             return;
         }
+        if (this._playerNearBoatman() && this.input.wasPressed('KeyE')) {
+            if (!this.bossDefeated.sandworm) {
+                this.toast = 'DEFEAT THE SANDWORM FIRST';
+                this.toastTimer = 2.2;
+                this._playBeep(220, 0.1, 'square', 0.1);
+                return;
+            }
+            this._openBoatmanDialog();
+            return;
+        }
+        const nearbyNpc = this._getNearbyNpc();
+        if (this.ridingBoat && this.input.wasPressed('KeyE') && this._tryToggleBoat()) {
+            return;
+        }
         if (this._playerNearTombstone() && this.input.wasPressed('KeyE')) {
             this._activateTombstoneSave();
+            return;
+        }
+        if (nearbyNpc && this.input.wasPressed('KeyE')) {
+            this._openNpcDialog(nearbyNpc);
+            return;
+        }
+        if (this.input.wasPressed('KeyE') && this._tryToggleBoat()) {
             return;
         }
         if (this._playerNearTreasureChest() && this.input.wasPressed('KeyE')) {
@@ -1500,6 +2509,18 @@ export class Game {
         const nearShrine = this._getNearbyShrine();
         if (nearShrine && this.input.wasPressed('KeyE')) {
             this._activateShrine(nearShrine);
+            return;
+        }
+
+        const nearFont = this._getNearbyAetherFont();
+        if (nearFont && this.input.wasPressed('KeyE')) {
+            this._activateAetherFont(nearFont);
+            return;
+        }
+
+        const nearAltar = this._getNearbyMnemoforge();
+        if (nearAltar && this.input.wasPressed('KeyE')) {
+            this._activateMnemoforge(nearAltar);
             return;
         }
 
@@ -1550,6 +2571,482 @@ export class Game {
             colors: [shrine.color, '#ffffff', '#fff7c8'],
             size: 2,
         });
+    }
+
+    _getNearbyAetherFont() {
+        if (!this.aetherFonts || !this.aetherFonts.length) return null;
+        const hitbox = this.player.getHitbox();
+        return this.aetherFonts.find((f) => rectsOverlap(hitbox, f.getInteractRect())) || null;
+    }
+
+    _activateAetherFont(font) {
+        if (!font.ready) {
+            const secs = Math.ceil(font.cooldown);
+            this.toast = `AETHER FONT DORMANT · ${secs}S`;
+            this.toastTimer = 1.6;
+            this._playBeep(240, 0.1, 'square', 0.08);
+            return;
+        }
+        const surge = font.activate();
+        if (!surge) return;
+
+        // --- Gameplay effects ---
+        // Heal the player up to maxHealth.
+        const healed = Math.min(surge.heal, this.player.maxHealth - this.player.health);
+        if (healed > 0) {
+            this.player.health = Math.min(this.player.maxHealth, this.player.health + healed);
+            this._spawnDamageNumber(this.player.cx, this.player.y - 2, healed, { variant: 'heal' });
+        }
+
+        // Damage every targetable enemy within surge radius.
+        let hits = 0;
+        const r2 = surge.radius * surge.radius;
+        for (const enemy of this.enemies) {
+            if (!enemy.isTargetable()) continue;
+            const ex = enemy.cx - surge.cx;
+            const ey = enemy.cy - surge.cy;
+            if (ex * ex + ey * ey > r2) continue;
+            // Use the player's attack direction as a push hint (or down by default).
+            if (enemy.takeHit(this.player.attackDirection, surge.damage)) {
+                hits += 1;
+                this._spawnDamageNumber(enemy.cx, enemy.cy - 6, surge.damage, { crit: false });
+                if (enemy === this.sandwormBoss) this.bossHpFlash = 0.3;
+                if (enemy.health <= 0 && this.hasLevelUpAbility) {
+                    this._awardXp(enemy.xpReward || 1, enemy.cx, enemy.y + 4);
+                    this._recordEnemySlain(enemy);
+                }
+            }
+        }
+
+        // --- Feedback ---
+        const parts = ['TIDAL SURGE'];
+        if (healed > 0) parts.push(`+${healed} HP`);
+        if (hits > 0) parts.push(`${hits} STRUCK`);
+        this.toast = parts.join(' · ');
+        this.toastTimer = 2.2;
+        this.screenShake = Math.max(this.screenShake, 0.75);
+        this.hitStopTimer = Math.max(this.hitStopTimer, 0.04);
+        this._playBeep(620, 0.12, 'sine', 0.14);
+        this._playBeep(980, 0.18, 'triangle', 0.1);
+        this._playBeep(1340, 0.22, 'sine', 0.08);
+
+        // Outward burst of seafoam motes.
+        this._spawnParticles(surge.cx, surge.cy, {
+            count: 36,
+            spread: Math.PI * 2,
+            minSpeed: 60,
+            maxSpeed: 190,
+            friction: 0.9,
+            gravity: -8,
+            life: 0.55,
+            colors: ['#a6f6ff', '#3cc7e0', '#ffffff', '#e8fbff'],
+            size: 2,
+        });
+        // Upward spray from the core.
+        this._spawnParticles(font.cx, font.y + 4, {
+            count: 14,
+            angle: -Math.PI / 2,
+            spread: Math.PI * 0.5,
+            minSpeed: 40,
+            maxSpeed: 110,
+            friction: 0.92,
+            gravity: 90,
+            life: 0.85,
+            colors: ['#a6f6ff', '#e8fbff', '#ffffff'],
+            size: 2,
+        });
+        // Faint healing glow around player.
+        this._spawnParticles(this.player.cx, this.player.cy - 6, {
+            count: 10,
+            spread: Math.PI * 2,
+            minSpeed: 18,
+            maxSpeed: 48,
+            friction: 0.88,
+            gravity: -25,
+            life: 0.7,
+            colors: ['#a6f6ff', '#e8fbff', '#ffffff'],
+            size: 2,
+        });
+    }
+
+    _getNearbyMnemoforge() {
+        if (!this.mnemoforges || !this.mnemoforges.length) return null;
+        const hitbox = this.player.getHitbox();
+        return this.mnemoforges.find((m) => rectsOverlap(hitbox, m.getInteractRect())) || null;
+    }
+
+    /**
+     * Re-temper the player's skill tree at a Mnemoforge Altar.
+     * - First use at a given altar is free ("pilgrim's grace").
+     * - Every subsequent use taxes 20% of current-level progress toward next level.
+     * - If the player has nothing invested AND no free respec pending, emit a soft
+     *   toast and do nothing — no wasted click.
+     */
+    _activateMnemoforge(altar) {
+        const invested = Object.values(this.player.skills).reduce((a, b) => a + (Number(b) || 0), 0);
+        if (!this.hasLevelUpAbility) {
+            this.toast = 'THE SLAB IS QUIET · NO MEMORIES TO MELT';
+            this.toastTimer = 2.0;
+            this._playBeep(280, 0.1, 'square', 0.06);
+            return;
+        }
+        if (invested <= 0) {
+            this.toast = 'MNEMOFORGE · NOTHING TO UNWEAVE';
+            this.toastTimer = 1.8;
+            this._playBeep(280, 0.1, 'square', 0.06);
+            return;
+        }
+
+        const firstUse = !altar.used;
+        let taxedXp = 0;
+        let taxedPoint = 0;
+        if (!firstUse) {
+            // Normal tax: 20% of current-level XP-toward-next. Never takes a level away.
+            const atMax = this.player.level >= (this.player.maxLevel || 25);
+            if (atMax) {
+                // At level cap there is no meaningful XP pool, so the slab
+                // swallows a refunded rank instead (min-maxer prevention).
+                taxedPoint = 1;
+            } else {
+                taxedXp = Math.max(10, Math.floor((this.player.xpToNext || 0) * 0.2));
+                if (taxedXp > 0) this.player.xp = Math.max(0, this.player.xp - taxedXp);
+            }
+        }
+        let refunded = this.player.resetSkills();
+        if (taxedPoint > 0 && refunded > 0) {
+            // Slab swallows one rank's worth of refund.
+            this.player.skillPoints = Math.max(0, this.player.skillPoints - taxedPoint);
+            refunded = Math.max(0, refunded - taxedPoint);
+        }
+        altar.activate();
+
+        // Feedback.
+        let costLabel;
+        if (firstUse) costLabel = 'FREE';
+        else if (taxedPoint > 0) costLabel = `-${taxedPoint} RANK TAX`;
+        else costLabel = `-${taxedXp} XP`;
+        this.toast = `MNEMOFORGE · ${refunded} RANKS RETURNED · ${costLabel}`;
+        this.toastTimer = 2.6;
+        this.screenShake = Math.max(this.screenShake, 0.45);
+        this.hitStopTimer = Math.max(this.hitStopTimer, 0.03);
+        this._playBeep(220, 0.18, 'sawtooth', 0.1);
+        this._playBeep(440, 0.14, 'triangle', 0.08);
+        this._playBeep(740, 0.22, 'sine', 0.09);
+
+        // Violet implosion from the altar, then a ring of soft motes rising.
+        this._spawnParticles(altar.cx, altar.cy, {
+            count: 24,
+            spread: Math.PI * 2,
+            minSpeed: 40,
+            maxSpeed: 120,
+            friction: 0.9,
+            gravity: -10,
+            life: 0.55,
+            colors: ['#c2b0ff', '#ffb8f5', '#ffffff', '#8a6ab8'],
+            size: 2,
+        });
+        this._spawnParticles(altar.cx, altar.y - 2, {
+            count: 12,
+            angle: -Math.PI / 2,
+            spread: Math.PI * 0.7,
+            minSpeed: 25,
+            maxSpeed: 70,
+            friction: 0.93,
+            gravity: 40,
+            life: 0.9,
+            colors: ['#e8d6ff', '#c2b0ff'],
+            size: 2,
+        });
+    }
+
+    _rollOuroborosInterval(bias = 0) {
+        // Base: 120–300s. `bias` shortens first interval (used on boot so a tremor can occur earlier).
+        const reduction = Math.max(0, Math.min(Number(bias) || 0, 60));
+        const base = 120 - reduction;
+        return base + Math.random() * 180;
+    }
+
+    _triggerOuroborosTremor() {
+        if (!this.world || !this.player) return;
+        // Bug OT-1 fix: refuse to stack a tremor on top of an active one.
+        if (this.ouroborosTremorTimer > 0) return;
+        // Bug OT-4 fix: don't stir the coil while the player is on the rowboat
+        //   — shards would spawn on unreachable land and vanish unseen.
+        if (this.ridingBoat) {
+            this.ouroborosNextTremor = 30 + Math.random() * 40; // retry sooner once disembarked
+            return;
+        }
+        // Bug OT-3 fix: silence the tremor entirely before the XP system is unlocked
+        //   so the player can't walk onto shards that give nothing and disappear.
+        if (!this.hasLevelUpAbility) {
+            this.ouroborosNextTremor = this._rollOuroborosInterval(0);
+            return;
+        }
+        this.ouroborosTremorTimer = this.ouroborosTremorMax;
+        this.screenShake = Math.max(this.screenShake, 0.85);
+        // deep-earth chord — the World-Coil stirs
+        this._playBeep(55, 1.6, 'sine', 0.2);
+        this._playBeep(82, 1.2, 'sine', 0.15);
+        this._playBeep(38, 1.8, 'sine', 0.16);
+        this.toast = 'THE WORLD-COIL STIRS';
+        this.toastTimer = 2.2;
+        // Dust plume under the player's feet
+        const px = this.player.x + this.player.w / 2;
+        const py = this.player.y + this.player.h;
+        this._spawnParticles(px, py - 1, {
+            count: 14,
+            angle: -Math.PI / 2,
+            spread: Math.PI,
+            minSpeed: 14,
+            maxSpeed: 46,
+            friction: 0.9,
+            gravity: 24,
+            life: 0.9,
+            colors: ['#d8c79a', '#a89372', '#6a5a42'],
+            size: 1,
+        });
+        const placed = this._spawnBoneglassShards();
+        // Bug OT-2 fix: if the ground refused all spawn attempts (player boxed in by
+        // water/props/map edge), the tremor still plays — but we re-roll the next
+        // interval shorter so the Coil gets another chance.
+        if (placed <= 0) {
+            this.ouroborosNextTremor = 40 + Math.random() * 60;
+        }
+    }
+
+    _spawnBoneglassShards() {
+        if (!this.world || !this.player) return;
+        if (!Array.isArray(this.boneglassShards)) this.boneglassShards = [];
+        const target = 3 + Math.floor(Math.random() * 4); // 3–6
+        const centerX = this.player.x + this.player.w / 2;
+        const centerY = this.player.y + this.player.h / 2;
+        let placed = 0;
+        let attempts = 0;
+        while (placed < target && attempts < 80) {
+            attempts++;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 56 + Math.random() * 104; // ~56–160px from player
+            const sx = Math.round(centerX + Math.cos(angle) * dist);
+            const sy = Math.round(centerY + Math.sin(angle) * dist);
+            // Safety: world bounds + walkable (non-boat) + don't stack on existing shard
+            if (this.world.collides(sx - 2, sy - 2, 4, 4, 'walker')) continue;
+            let tooClose = false;
+            for (const existing of this.boneglassShards) {
+                const dx = existing.x - sx;
+                const dy = existing.y - sy;
+                if (dx * dx + dy * dy < 144) { tooClose = true; break; }
+            }
+            if (tooClose) continue;
+            this.boneglassShards.push({
+                x: sx,
+                y: sy,
+                life: 18,
+                maxLife: 18,
+                phase: Math.random() * Math.PI * 2,
+                spawnPulse: 1,
+            });
+            // A little ember-glint when it surfaces
+            this._spawnParticles(sx, sy, {
+                count: 4,
+                angle: -Math.PI / 2,
+                spread: Math.PI * 0.9,
+                minSpeed: 10,
+                maxSpeed: 36,
+                friction: 0.93,
+                gravity: 24,
+                life: 0.5,
+                colors: ['#ffe9a8', '#ffcb6a'],
+                size: 1,
+            });
+            placed++;
+        }
+        return placed;
+    }
+
+    _updateOuroborosTremor(dt) {
+        if (!Array.isArray(this.boneglassShards)) this.boneglassShards = [];
+
+        // Tremor body: keep the camera shaking for the duration, then idle.
+        if (this.ouroborosTremorTimer > 0) {
+            this.ouroborosTremorTimer = Math.max(0, this.ouroborosTremorTimer - dt);
+            const strength = 0.35 + (this.ouroborosTremorTimer / this.ouroborosTremorMax) * 0.5;
+            this.screenShake = Math.max(this.screenShake, strength);
+        } else {
+            // Only tick the countdown during normal play — freeze on pause/dialog/reward/death.
+            const locked = this.paused || this.dialog || this.rewardPopup || this.deathState || this.ridingBoat;
+            if (!locked && this.player && this.world) {
+                if (typeof this.ouroborosNextTremor !== 'number') this.ouroborosNextTremor = this._rollOuroborosInterval(90);
+                this.ouroborosNextTremor -= dt;
+                if (this.ouroborosNextTremor <= 0) {
+                    this._triggerOuroborosTremor();
+                    this.ouroborosNextTremor = this._rollOuroborosInterval(0);
+                }
+            }
+        }
+
+        // Shard lifecycle + pickup
+        if (!this.player) return;
+        const pcx = this.player.x + this.player.w / 2;
+        const pcy = this.player.y + this.player.h / 2;
+        for (let i = this.boneglassShards.length - 1; i >= 0; i--) {
+            const s = this.boneglassShards[i];
+            s.life -= dt;
+            s.phase += dt * 3;
+            if (s.spawnPulse > 0) s.spawnPulse = Math.max(0, s.spawnPulse - dt * 1.6);
+            if (s.life <= 0) {
+                this.boneglassShards.splice(i, 1);
+                continue;
+            }
+            const dx = s.x - pcx;
+            const dy = s.y - pcy;
+            if (dx * dx + dy * dy < 72) { // ~8.5px pickup radius
+                const amount = 12;
+                if (this.hasLevelUpAbility) this._awardXp(amount, s.x, s.y);
+                this._playBeep(720, 0.07, 'triangle', 0.14);
+                this._playBeep(1020, 0.09, 'sine', 0.1);
+                this._spawnParticles(s.x, s.y, {
+                    count: 10,
+                    angle: -Math.PI / 2,
+                    spread: Math.PI * 1.3,
+                    minSpeed: 18,
+                    maxSpeed: 60,
+                    friction: 0.93,
+                    gravity: 26,
+                    life: 0.6,
+                    colors: ['#ffe9a8', '#ffcb6a', '#fff6cc'],
+                    size: 1,
+                });
+                this.boneglassShards.splice(i, 1);
+            }
+        }
+    }
+
+    _updateFogOfWar(dt) {
+        if (!this.world || !this.player || !this.fogMask) return;
+        // Bug FoW-4 fix: guard against NaN / infinity on player coords (can happen
+        // briefly during portal cutscenes or save-state restoration).
+        if (!Number.isFinite(this.player.cx) || !Number.isFinite(this.player.cy)) return;
+        const TILE_SZ = 16;
+        const cols = this.world.cols;
+        const rows = this.world.rows;
+        const R = 6;
+        const R2 = R * R;
+
+        // Bug FoW-2 fix: interpolate between last-frame and this-frame positions
+        // so fast dashes, teleports, and frame stalls don't leave unseen seams.
+        // We sample every ~4 tiles along the line (half the reveal radius).
+        const px = this.player.cx;
+        const py = this.player.cy;
+        const lpx = Number.isFinite(this._fogLastX) ? this._fogLastX : px;
+        const lpy = Number.isFinite(this._fogLastY) ? this._fogLastY : py;
+        const dx = px - lpx;
+        const dy = py - lpy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const step = (R * TILE_SZ) * 0.5; // 48px between samples
+        const samples = Math.max(1, Math.ceil(dist / step) + 1);
+        for (let s = 0; s < samples; s++) {
+            const t = samples === 1 ? 1 : s / (samples - 1);
+            const sx = lpx + dx * t;
+            const sy = lpy + dy * t;
+            const pcol = Math.floor(sx / TILE_SZ);
+            const prow = Math.floor(sy / TILE_SZ);
+            const c0 = Math.max(0, pcol - R);
+            const c1 = Math.min(cols - 1, pcol + R);
+            const r0 = Math.max(0, prow - R);
+            const r1 = Math.min(rows - 1, prow + R);
+            for (let r = r0; r <= r1; r++) {
+                const rowBase = r * cols;
+                const dr = r - prow;
+                for (let c = c0; c <= c1; c++) {
+                    const dc = c - pcol;
+                    if (dc * dc + dr * dr > R2) continue;
+                    const idx = rowBase + c;
+                    if (!this.fogMask[idx]) {
+                        this.fogMask[idx] = 1;
+                        this.fogReveal[idx] = 1;
+                    }
+                }
+            }
+        }
+        this._fogLastX = px;
+        this._fogLastY = py;
+
+        // Decay the reveal-pulse buffer so the fade-in only flashes once.
+        if (this.fogReveal) {
+            const decay = dt * 1.8;
+            for (let i = 0; i < this.fogReveal.length; i++) {
+                if (this.fogReveal[i] > 0) this.fogReveal[i] = Math.max(0, this.fogReveal[i] - decay);
+            }
+        }
+    }
+
+    _drawFogOverlay(ctx, frameX, frameY, frameW, frameH, srcX, srcY, sourceW, sourceH) {
+        if (!this.fogMask || !this.world) return;
+        const cols = this.world.cols;
+        const rows = this.world.rows;
+        const TILE_SZ = 16;
+        // Map world-source rect to tile range
+        const c0 = Math.max(0, Math.floor(srcX / TILE_SZ));
+        const c1 = Math.min(cols - 1, Math.ceil((srcX + sourceW) / TILE_SZ));
+        const r0 = Math.max(0, Math.floor(srcY / TILE_SZ));
+        const r1 = Math.min(rows - 1, Math.ceil((srcY + sourceH) / TILE_SZ));
+        const scaleX = frameW / sourceW;
+        const scaleY = frameH / sourceH;
+        for (let r = r0; r <= r1; r++) {
+            const rowBase = r * cols;
+            for (let c = c0; c <= c1; c++) {
+                const idx = rowBase + c;
+                const seen = this.fogMask[idx];
+                if (seen) continue;
+                const tx = frameX + Math.round(((c * TILE_SZ) - srcX) * scaleX);
+                const ty = frameY + Math.round(((r * TILE_SZ) - srcY) * scaleY);
+                const tw = Math.max(1, Math.ceil(TILE_SZ * scaleX));
+                const th = Math.max(1, Math.ceil(TILE_SZ * scaleY));
+                ctx.fillStyle = 'rgba(8, 6, 14, 0.92)';
+                ctx.fillRect(tx, ty, tw, th);
+            }
+        }
+        // Ink-bloom glow on recently-revealed tiles
+        for (let r = r0; r <= r1; r++) {
+            const rowBase = r * cols;
+            for (let c = c0; c <= c1; c++) {
+                const idx = rowBase + c;
+                const pulse = this.fogReveal ? this.fogReveal[idx] : 0;
+                if (pulse <= 0) continue;
+                const tx = frameX + Math.round(((c * TILE_SZ) - srcX) * scaleX);
+                const ty = frameY + Math.round(((r * TILE_SZ) - srcY) * scaleY);
+                const tw = Math.max(1, Math.ceil(TILE_SZ * scaleX));
+                const th = Math.max(1, Math.ceil(TILE_SZ * scaleY));
+                ctx.fillStyle = `rgba(255, 232, 138, ${0.24 * pulse})`;
+                ctx.fillRect(tx, ty, tw, th);
+            }
+        }
+    }
+
+    _drawBoneglassShard(ctx, s) {
+        const pulse = 0.6 + Math.sin(s.phase) * 0.4;
+        const fadeIn = Math.min(1, 1 - s.spawnPulse);
+        const fadeOut = Math.min(1, Math.max(0, s.life) / 4); // last 4s tapers
+        const alpha = fadeIn * fadeOut * (0.7 + pulse * 0.3);
+        if (alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        // Amber glow halo
+        ctx.fillStyle = 'rgba(255, 206, 120, 0.22)';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 4 + pulse * 2, 0, Math.PI * 2);
+        ctx.fill();
+        // Shard body — jagged amber splinter
+        const sx = Math.round(s.x);
+        const sy = Math.round(s.y);
+        ctx.fillStyle = '#fff1b8';
+        ctx.fillRect(sx - 1, sy - 3, 2, 6);
+        ctx.fillStyle = '#f5b85a';
+        ctx.fillRect(sx - 2, sy, 1, 1);
+        ctx.fillRect(sx + 1, sy - 1, 1, 1);
+        ctx.fillStyle = '#fffbe0';
+        ctx.fillRect(sx, sy - 2, 1, 1);
+        ctx.restore();
     }
 
     _activateLoreStone(stone) {
@@ -1648,6 +3145,7 @@ export class Game {
 
     _openWorldMap() {
         this.worldMapOpen = true;
+        this.worldMapMode = 'relative';
         this._playBeep(720, 0.08, 'triangle', 0.12);
     }
 
@@ -1657,8 +3155,12 @@ export class Game {
     }
 
     _updateWorldMap() {
+        if (this.input.wasPressed('KeyM')) {
+            this.worldMapMode = this.worldMapMode === 'relative' ? 'world' : 'relative';
+            this._playBeep(840, 0.08, 'triangle', 0.12);
+            return;
+        }
         if (
-            this.input.wasPressed('KeyM') ||
             this.input.wasPressed('Escape') ||
             this.input.wasPressed('Space') ||
             this.input.wasPressed('Enter') ||
@@ -1679,6 +3181,7 @@ export class Game {
             soundTimer: DIALOG_SOUND_DURATION,
             grantMapAfter: this.hasTalkedToElara ? -1 : 0,
         };
+        if (this.input) this.input.pressed = {};
         this._playBeep(620, 0.08, 'triangle', 0.12);
         this._startTextSound();
     }
@@ -1686,6 +3189,7 @@ export class Game {
     _updateDialog(dt) {
         const d = this.dialog;
         if (!d) return;
+        const pageCount = d.images?.length || d.pages?.length || 0;
 
         if (d.soundTimer > 0) {
             d.soundTimer -= dt;
@@ -1706,12 +3210,18 @@ export class Game {
                 return;
             }
 
-            if (d.index + 1 < d.images.length) {
+            if (d.index + 1 < pageCount) {
                 d.index += 1;
                 d.soundTimer = DIALOG_SOUND_DURATION;
                 this._startTextSound();
             } else {
-                this.hasTalkedToElara = true;
+                if (typeof d.onFinish === 'function') {
+                    d.onFinish();
+                } else if (d.kind === 'boatman') {
+                    this._grantBoat();
+                } else {
+                    this.hasTalkedToElara = true;
+                }
                 this.dialog = null;
                 this._saveGame();
             }
@@ -1724,6 +3234,7 @@ export class Game {
             image,
             body,
         };
+        if (this.input) this.input.pressed = {};
         this._playBeep(880, 0.14, 'triangle', 0.16);
     }
 
@@ -1741,6 +3252,88 @@ export class Game {
                 this._startTextSound();
             }
         }
+    }
+
+    _renderRuntimeDialogPage(page) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        const font = this.assets.pixelFont;
+        const accent = page.accent || '#8effec';
+        const portrait = page.portrait;
+        const portraitX = 12;
+        const portraitY = 36;
+        const portraitW = 74;
+        const portraitH = 96;
+        const panelX = 82;
+        const panelY = 20;
+        const panelW = 226;
+        const panelH = 112;
+
+        ctx.fillStyle = 'rgba(22, 26, 48, 0.96)';
+        ctx.fillRect(panelX, panelY, panelW, panelH);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
+        ctx.strokeStyle = '#5f7fb1';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(panelX + 3.5, panelY + 3.5, panelW - 7, panelH - 7);
+
+        ctx.fillStyle = 'rgba(13, 18, 34, 0.98)';
+        ctx.fillRect(portraitX, portraitY, portraitW, portraitH);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(portraitX + 0.5, portraitY + 0.5, portraitW - 1, portraitH - 1);
+        ctx.fillStyle = `${accent}22`;
+        ctx.fillRect(portraitX + 4, portraitY + 4, portraitW - 8, portraitH - 8);
+
+        if (portrait) {
+            const scale = Math.min((portraitW - 12) / portrait.width, (portraitH - 12) / portrait.height);
+            const drawW = Math.max(1, Math.round(portrait.width * scale));
+            const drawH = Math.max(1, Math.round(portrait.height * scale));
+            const drawX = portraitX + Math.floor((portraitW - drawW) / 2);
+            const drawY = portraitY + portraitH - drawH - 4;
+            ctx.drawImage(portrait, drawX, drawY, drawW, drawH);
+        }
+
+        font.draw(ctx, this._clampPixelText(page.speaker || 'WANDERER', panelW - 24), panelX + 12, panelY + 10, { color: accent });
+        if (page.title) {
+            font.draw(ctx, this._clampPixelText(page.title, panelW - 24), panelX + 12, panelY + 20, { color: '#fff2b3' });
+        }
+        const lines = this._wrapPixelText(page.body || '', panelW - 24);
+        lines.slice(0, 5).forEach((line, index) => {
+            font.draw(ctx, line, panelX + 12, panelY + 38 + index * 10, { color: '#f1f5ff' });
+        });
+
+        return canvas;
+    }
+
+    _getCurrentDialogImage() {
+        const d = this.dialog;
+        if (!d) return null;
+        if (d.images) return d.images[d.index];
+        if (d.pages) {
+            if (!d.renderedPages) d.renderedPages = [];
+            if (!d.renderedPages[d.index]) {
+                d.renderedPages[d.index] = this._renderRuntimeDialogPage(d.pages[d.index]);
+            }
+            return d.renderedPages[d.index];
+        }
+        return null;
+    }
+
+    _clampPixelText(text, maxWidth, scale = 1) {
+        const font = this.assets?.pixelFont;
+        const normalized = String(text || '').trim().replace(/\s+/g, ' ').toUpperCase();
+        if (!font || font.measure(normalized, scale) <= maxWidth) return normalized;
+        let clipped = normalized;
+        while (clipped.length > 1 && font.measure(`${clipped}...`, scale) > maxWidth) {
+            clipped = clipped.slice(0, -1);
+        }
+        return `${clipped}...`;
     }
 
     _wrapPixelText(text, maxWidth, scale = 1) {
@@ -1814,9 +3407,20 @@ export class Game {
     _playSwordSlash() {
         if (!this.swordSlashSound || !this.settings.soundEnabled) return;
         try {
-            // Clone so rapid swings overlap instead of stomping each other.
-            const clip = this.swordSlashSound.cloneNode(true);
-            clip.volume = this.swordSlashSound.volume;
+            // Pool of pre-cloned clips so rapid swings overlap cleanly without
+            // unbounded allocation or audio congestion.
+            if (!this._swordSlashPool) {
+                this._swordSlashPool = [];
+                this._swordSlashPoolIndex = 0;
+                for (let i = 0; i < 4; i++) {
+                    const clip = this.swordSlashSound.cloneNode(true);
+                    clip.volume = this.swordSlashSound.volume;
+                    this._swordSlashPool.push(clip);
+                }
+            }
+            const clip = this._swordSlashPool[this._swordSlashPoolIndex];
+            this._swordSlashPoolIndex = (this._swordSlashPoolIndex + 1) % this._swordSlashPool.length;
+            try { clip.currentTime = 0; } catch (_) { /* ignore */ }
             const p = clip.play();
             if (p && p.catch) p.catch(() => {});
         } catch (_) { /* ignore */ }
@@ -1967,7 +3571,7 @@ export class Game {
                             colors: ['#ff8fae', '#ff5577', '#ffffff'], size: 2,
                         });
                     }
-                    this.player.onEnemySlain?.();
+                    this._recordEnemySlain(enemy);
 
                     this._spawnParticles(hitX, hitY, {
                         count: 18,
@@ -2018,7 +3622,10 @@ export class Game {
         const px = this.player.cx;
         const py = this.player.cy;
         const radius = 56;
-        const dmg = Math.max(2, this.player.attackDamage + 1);
+        // Cleave should respect the player's combo bonus so it stays relevant
+        // late-game; earlier it was capped at flat attack+1 and felt anemic.
+        const comboMult = this.player.comboDamageMult ? this.player.comboDamageMult() : 1;
+        const dmg = Math.max(2, Math.round((this.player.attackDamage + 1) * comboMult));
 
         this.screenShake = Math.max(this.screenShake, 1.0);
         this.hitStopTimer = Math.max(this.hitStopTimer, 0.05);
@@ -2053,7 +3660,7 @@ export class Game {
                 const slain = enemy.health <= 0;
                 if (slain && this.hasLevelUpAbility) {
                     this._awardXp(enemy.xpReward || 1, enemy.cx, enemy.y + 4);
-                    this.player.onEnemySlain?.();
+                    this._recordEnemySlain(enemy);
                 }
             }
         }
@@ -2237,12 +3844,16 @@ export class Game {
         const crit = !!opts.crit;
         // Slight horizontal jitter so stacked hits don't perfectly overlap.
         const jx = (Math.random() - 0.5) * 6;
+        let text;
+        if (variant === 'heal') text = `+${amount}`;
+        else if (crit) text = `${amount}!`;
+        else text = `${amount}`;
         this.damageNumbers.push({
             x: x + jx,
             y: y - 2,
             vy: -42 - Math.random() * 14,
             vx: jx * 1.4,
-            text: crit ? `${amount}!` : `${amount}`,
+            text,
             variant,
             crit,
             timer: 0.7,
@@ -2273,7 +3884,9 @@ export class Game {
             const popScale = t < 0.18 ? d.scale * (0.6 + (t / 0.18) * 0.4) : d.scale;
             const color = d.variant === 'player'
                 ? '#ff6b6b'
-                : d.crit ? '#ffec80' : '#ffffff';
+                : d.variant === 'heal'
+                    ? '#8dffc2'
+                    : d.crit ? '#ffec80' : '#ffffff';
             const w = font.measure(d.text, popScale);
             const xOff = Math.round(d.x - w / 2);
             const yOff = Math.round(d.y);
@@ -2525,6 +4138,12 @@ export class Game {
         if (!this.hasTalkedToElara) {
             return this.world?.getLandmark('portal') || null;
         }
+        if (this.bossDefeated?.sandworm && !this.hasBoat) {
+            if (this.currentRealmId === 'driftmere' && this.boatman) {
+                return { x: this.boatman.cx, y: this.boatman.y - 8 };
+            }
+            return this.world?.getLandmark('portal') || null;
+        }
         if (this.currentRealmId !== 'frontier') {
             if (!this.hasReachedCanyons || !this.hasReachedSaltFlats || !this.hasReachedTropics || !this.hasLevelUpAbility) {
                 return this.world?.getLandmark('portal') || null;
@@ -2535,6 +4154,8 @@ export class Game {
         if (!this.hasReachedSaltFlats) return this.world?.getLandmark('salt') || null;
         if (!this.hasReachedTropics) return this.world?.getLandmark('tropics') || null;
         if (!this.hasLevelUpAbility) return this.world?.getLandmark('relic') || null;
+        const sideQuestNpc = this._getTrackedSideQuestNpc();
+        if (sideQuestNpc) return { x: sideQuestNpc.cx, y: sideQuestNpc.y - 10 };
         return null;
     }
 
@@ -2543,6 +4164,11 @@ export class Game {
             return this.currentRealmId === 'driftmere'
                 ? 'TALK TO ELARA'
                 : 'RETURN TO DRIFTMERE AND FIND ELARA';
+        }
+        if (this.bossDefeated?.sandworm && !this.hasBoat) {
+            return this.currentRealmId === 'driftmere'
+                ? 'SPEAK TO THE BOATMAN AT TIDEBREAK CAMP'
+                : 'RETURN TO DRIFTMERE AND SPEAK TO THE BOATMAN';
         }
         if (this.currentRealmId !== 'frontier' && (!this.hasReachedCanyons || !this.hasReachedSaltFlats || !this.hasReachedTropics || !this.hasLevelUpAbility)) {
             return 'ENTER THE AMBERWAKE GATE';
@@ -2554,6 +4180,13 @@ export class Game {
         if (this.pillars.length > 0 && !this._allPillarsDestroyed()) {
             const done = this.pillars.length - this._pillarsRemaining();
             return `DESTROY THE MAGICAL PILLARS ${done}/${this.pillars.length}`;
+        }
+        const readyNpc = this._getReadyQuestNpc();
+        if (readyNpc) return `SIDE QUEST READY: ${readyNpc.name.toUpperCase()}`;
+        const activeNpc = this._getTrackedSideQuestNpc();
+        if (activeNpc) {
+            const progress = this._npcQuestProgress(activeNpc.effect || {});
+            return `${activeNpc.name.toUpperCase()}: ${progress.text}`;
         }
         return 'EXPLORE THE SUNCLEFT FRONTIER';
     }
@@ -2577,6 +4210,7 @@ export class Game {
         }
 
         this._drawEntitiesSorted(ctx);
+        this._drawNpcQuestMarkers(ctx);
 
         if (this.elara && !this.hasTalkedToElara) this._drawElaraMarker(ctx);
         this._drawProjectiles(ctx);
@@ -2594,11 +4228,23 @@ export class Game {
             ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
         }
         if (this.started && this.levelUpAnim) this._drawLevelUpBanner(ctx);
+        const nearbyNpc = this._getNearbyNpc();
         if (this.started && !this.dialog && !this.rewardPopup && !this.worldMapOpen && !this.deathState) {
             if (this._playerNearElara()) {
                 this._drawInteractPrompt(ctx, 'E: TALK TO ELARA');
             } else if (this._playerNearTombstone()) {
                 this._drawInteractPrompt(ctx, 'E: SAVE · RESTORE HP');
+            } else if (this._playerNearBoatman()) {
+                const label = this.bossDefeated.sandworm
+                    ? 'E: TALK TO BOATMAN'
+                    : 'E: TALK · DEFEAT SANDWORM FIRST';
+                this._drawInteractPrompt(ctx, label);
+            } else if (nearbyNpc) {
+                this._drawInteractPrompt(ctx, this._npcInteractLabel(nearbyNpc));
+            } else if (this.ridingBoat) {
+                this._drawInteractPrompt(ctx, 'E: STEP ASHORE');
+            } else if (this._playerNearBoat()) {
+                this._drawInteractPrompt(ctx, 'E: BOARD ROWBOAT');
             }
         }
         if (
@@ -2609,6 +4255,7 @@ export class Game {
             !this.deathState &&
             !this._playerNearElara() &&
             !this._playerNearTombstone() &&
+            !nearbyNpc &&
             this._playerNearTreasureChest() &&
             !this.hasLevelUpAbility
         ) {
@@ -2623,15 +4270,28 @@ export class Game {
             !this.deathState &&
             !this._playerNearElara() &&
             !this._playerNearTombstone() &&
+            !nearbyNpc &&
             !this._playerNearTreasureChest()
         ) {
             const shrine = this._getNearbyShrine();
+            const nearFont = this._getNearbyAetherFont();
             if (shrine) {
                 const label = shrine.ready ? shrine.prompt : `${shrine.label} · ${Math.ceil(shrine.cooldown)}S`;
                 this._drawInteractPrompt(ctx, label);
+            } else if (nearFont) {
+                const label = nearFont.ready
+                    ? nearFont.prompt
+                    : `AETHER FONT · ${Math.ceil(nearFont.cooldown)}S`;
+                this._drawInteractPrompt(ctx, label);
             } else {
-                const stone = this._getNearbyLoreStone();
-                if (stone) this._drawInteractPrompt(ctx, stone.read ? 'E: RE-READ MARKER' : stone.prompt);
+                const altar = this._getNearbyMnemoforge();
+                if (altar) {
+                    const label = altar.used ? 'E: RE-TEMPER · -20% NEXT-LEVEL XP' : altar.prompt;
+                    this._drawInteractPrompt(ctx, label);
+                } else {
+                    const stone = this._getNearbyLoreStone();
+                    if (stone) this._drawInteractPrompt(ctx, stone.read ? 'E: RE-READ MARKER' : stone.prompt);
+                }
             }
         }
         if (
@@ -2642,6 +4302,7 @@ export class Game {
             !this.deathState &&
             !this._playerNearElara() &&
             !this._playerNearTombstone() &&
+            !nearbyNpc &&
             !this._playerNearTreasureChest()
         ) {
             const portal = this._getNearbyPortal();
@@ -2696,6 +4357,27 @@ export class Game {
             });
         }
 
+        if (this.boatman) {
+            drawables.push({
+                sortY: this.boatman.sortY,
+                draw: () => this.boatman.draw(ctx),
+            });
+        }
+
+        for (const npc of (this.npcs || [])) {
+            drawables.push({
+                sortY: npc.sortY,
+                draw: () => npc.draw(ctx),
+            });
+        }
+
+        if (this.boat) {
+            drawables.push({
+                sortY: this.boat.sortY,
+                draw: () => this.boat.draw(ctx),
+            });
+        }
+
         if (this.tombstone) {
             drawables.push({
                 sortY: this.tombstone.sortY,
@@ -2723,6 +4405,15 @@ export class Game {
         for (const shrine of this.shrines) {
             drawables.push({ sortY: shrine.sortY, draw: () => shrine.draw(ctx) });
         }
+        for (const font of (this.aetherFonts || [])) {
+            drawables.push({ sortY: font.sortY, draw: () => font.draw(ctx) });
+        }
+        for (const altar of (this.mnemoforges || [])) {
+            drawables.push({ sortY: altar.sortY, draw: () => altar.draw(ctx) });
+        }
+        for (const shard of (this.boneglassShards || [])) {
+            drawables.push({ sortY: shard.y, draw: () => this._drawBoneglassShard(ctx, shard) });
+        }
         for (const crystal of this.crystals) {
             drawables.push({ sortY: crystal.sortY, draw: () => crystal.draw(ctx) });
         }
@@ -2734,10 +4425,12 @@ export class Game {
             });
         }
 
-        drawables.push({
-            sortY: this.player.y + this.player.h,
-            draw: () => this.player.draw(ctx),
-        });
+        if (!this.ridingBoat) {
+            drawables.push({
+                sortY: this.player.y + this.player.h,
+                draw: () => this.player.draw(ctx),
+            });
+        }
 
         drawables.sort((a, b) => a.sortY - b.sortY);
         for (const entry of drawables) entry.draw();
@@ -2760,7 +4453,7 @@ export class Game {
     _drawDialog(ctx) {
         const d = this.dialog;
         if (!d) return;
-        const img = d.images[d.index];
+        const img = this._getCurrentDialogImage();
         if (!img) return;
 
         // dim backdrop
@@ -3790,6 +5483,26 @@ export class Game {
         ctx.fillRect(x - 4, y - 21, 8, 2);
     }
 
+    _drawNpcQuestMarkers(ctx) {
+        if (!this.npcs || !this.npcs.length) return;
+        const font = this.assets.pixelFont;
+        const pulse = Math.sin(this.gameTime * 5) * 0.5 + 0.5;
+        for (const npc of this.npcs) {
+            const state = this._npcQuestState(npc);
+            if (!state || state === 'complete') continue;
+            const label = state === 'ready' ? '!' : '?';
+            const color = state === 'ready' ? '#ffe78a' : npc.accent;
+            const x = Math.round(npc.cx - 4);
+            const y = Math.round(npc.y - 13 - pulse * 2);
+            ctx.fillStyle = `rgba(7, 11, 19, ${0.72 + pulse * 0.12})`;
+            ctx.fillRect(x, y, 8, 9);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, y + 0.5, 7, 8);
+            font.draw(ctx, label, x + 2, y + 2, { color });
+        }
+    }
+
     _drawElaraMarker(ctx) {
         const font = this.assets.pixelFont;
         const label = 'ELARA';
@@ -3891,9 +5604,16 @@ export class Game {
         const interactPromptActive = !this.dialog && !this.rewardPopup && !this.worldMapOpen && !this.deathState && (
             this._playerNearElara() ||
             this._playerNearTombstone() ||
+            this._playerNearBoatman() ||
+            this._playerNearBoat() ||
+            this.ridingBoat ||
             (this._playerNearTreasureChest() && !this.hasLevelUpAbility) ||
             this._getNearbyShrine() ||
+            this._getNearbyAetherFont() ||
+            this._getNearbyMnemoforge() ||
             this._getNearbyLoreStone() ||
+            this._getNearbyNpc() ||
+            this._getNearbyPortal() ||
             this.activeLoreReadout
         );
         const bossActive = this.bossState === 'preparing' || this.bossState === 'fighting';
@@ -3956,7 +5676,30 @@ export class Game {
                 y: this.tombstone.cy,
             });
         }
+        if (this.hasMap) {
+            for (const npc of (this.npcs || [])) {
+                const questState = this._npcQuestState(npc);
+                markers.push({
+                    type: questState === 'ready' ? 'npcReady' : questState === 'complete' ? 'npcComplete' : 'npc',
+                    x: npc.cx,
+                    y: npc.cy,
+                    label: npc.name,
+                });
+            }
+        }
         return markers;
+    }
+
+    _markerRevealed(marker) {
+        if (!this.fogMask || !this.world) return true;
+        // Always reveal the player's current location markers (camp/portal) — they're
+        // navigational anchors and the player can't exist in an unseen tile anyway.
+        // For everything else, show only once the pin's tile has been explored.
+        if (marker.type === 'camp' || marker.type === 'portal') return true;
+        const TILE_SZ = 16;
+        const col = Math.max(0, Math.min(this.world.cols - 1, Math.floor(marker.x / TILE_SZ)));
+        const row = Math.max(0, Math.min(this.world.rows - 1, Math.floor(marker.y / TILE_SZ)));
+        return !!this.fogMask[row * this.world.cols + col];
     }
 
     _drawMinimap(ctx, x, y, w, h) {
@@ -4020,7 +5763,21 @@ export class Game {
             }
         }
 
+        // Fog veil over unseen tiles (sample per minimap pixel).
+        if (this.fogMask) {
+            for (let py = 0; py < innerH; py++) {
+                const row = Math.min(this.world.rows - 1, Math.floor(py * rowsPerPx));
+                for (let px = 0; px < innerW; px++) {
+                    const col = Math.min(this.world.cols - 1, Math.floor(px * colsPerPx));
+                    if (this.fogMask[row * this.world.cols + col]) continue;
+                    ctx.fillStyle = 'rgba(8, 6, 14, 0.88)';
+                    ctx.fillRect(x + 2 + px, y + 2 + py, 1, 1);
+                }
+            }
+        }
+
         for (const marker of this._getMapMarkers()) {
+            if (!this._markerRevealed(marker)) continue;
             const tx = x + 2 + Math.round((marker.x / worldW) * innerW);
             const ty = y + 2 + Math.round((marker.y / worldH) * innerH);
             ctx.fillStyle = marker.type === 'camp'
@@ -4033,6 +5790,12 @@ export class Game {
                         ? '#d9f6ff'
                         : marker.type === 'tropics'
                             ? '#6fffd5'
+                            : marker.type === 'npcReady'
+                                ? '#ffe78a'
+                                : marker.type === 'npcComplete'
+                                    ? '#7b8b94'
+                                    : marker.type === 'npc'
+                                        ? '#f6a7ff'
                             : '#f6a7ff';
             ctx.fillRect(tx - 1, ty - 1, 3, 3);
             ctx.fillStyle = '#101726';
@@ -4109,14 +5872,17 @@ export class Game {
         ctx.fillRect(frameX, frameY, frameW, frameH);
 
         const cache = this._getWorldMapCache();
-        const sourceW = Math.min(cache.width, 34 * 16);
-        const sourceH = Math.min(cache.height, 26 * 16);
-        const srcX = Math.max(0, Math.min(cache.width - sourceW, Math.round(this.player.cx - sourceW / 2)));
-        const srcY = Math.max(0, Math.min(cache.height - sourceH, Math.round(this.player.cy - sourceH / 2)));
+        const worldMode = this.worldMapMode === 'world';
+        const sourceW = worldMode ? cache.width : Math.min(cache.width, 34 * 16);
+        const sourceH = worldMode ? cache.height : Math.min(cache.height, 26 * 16);
+        const srcX = worldMode ? 0 : Math.max(0, Math.min(cache.width - sourceW, Math.round(this.player.cx - sourceW / 2)));
+        const srcY = worldMode ? 0 : Math.max(0, Math.min(cache.height - sourceH, Math.round(this.player.cy - sourceH / 2)));
         const prevSmoothing = ctx.imageSmoothingEnabled;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(cache, srcX, srcY, sourceW, sourceH, frameX, frameY, frameW, frameH);
         ctx.imageSmoothingEnabled = prevSmoothing;
+        // Fog veil: obscure tiles the player has never seen.
+        this._drawFogOverlay(ctx, frameX, frameY, frameW, frameH, srcX, srcY, sourceW, sourceH);
 
         for (let gx = 1; gx < 4; gx++) {
             const lineX = frameX + Math.round((frameW * gx) / 4);
@@ -4143,9 +5909,21 @@ export class Game {
             tropics: '#6fffd5',
             relic: '#ffe78a',
             tombstone: '#d8e2ff',
+            lighthouse: '#fff2a0',
+            wreck: '#c4a078',
+            watchtower: '#c8ffb0',
+            stones: '#bba67a',
+            desert: '#ffd27b',
+            ruins: '#f6a7ff',
+            burnt: '#ff7a4a',
+            steppe: '#c8b06a',
+            npc: '#f6a7ff',
+            npcReady: '#ffe78a',
+            npcComplete: '#7b8b94',
         };
         for (const marker of this._getMapMarkers()) {
             if (marker.x < srcX || marker.x > srcX + sourceW || marker.y < srcY || marker.y > srcY + sourceH) continue;
+            if (!this._markerRevealed(marker)) continue; // fog hides undiscovered pins
             const tx = frameX + Math.round(((marker.x - srcX) / sourceW) * frameW);
             const ty = frameY + Math.round(((marker.y - srcY) / sourceH) * frameH);
             ctx.fillStyle = markerStyles[marker.type] || '#eaf2ff';
@@ -4172,11 +5950,13 @@ export class Game {
         ctx.fillRect(Math.round((NATIVE_WIDTH - tw) / 2) - 4, 6, tw + 8, 12);
         font.draw(ctx, title, Math.round((NATIVE_WIDTH - tw) / 2), 8, { color: '#ffe78a' });
 
-        const subtitle = `LOCAL SCOUT MAP · ${biomeInfo.label}`;
+        const subtitle = worldMode
+            ? `WORLD MAP · ${this.world.realmLabel}`
+            : `RELATIVE MAP · ${biomeInfo.label}`;
         const sw = font.measure(subtitle, 1);
         font.draw(ctx, subtitle, Math.round((NATIVE_WIDTH - sw) / 2), 18, { color: biomeInfo.accent || '#dff6ff' });
 
-        const foot = 'PRESS M OR ESC TO CLOSE';
+        const foot = worldMode ? 'M: RELATIVE VIEW · ENTER: CLOSE' : 'M: WORLD VIEW · ENTER: CLOSE';
         if (Math.floor(this.gameTime * 3) % 2) {
             const fw = font.measure(foot, 1);
             font.draw(ctx, foot, Math.round((NATIVE_WIDTH - fw) / 2), NATIVE_HEIGHT - 12, { color: '#ffe78a' });
@@ -4301,8 +6081,12 @@ export class Game {
             hasReachedSaltFlats: this.hasReachedSaltFlats,
             hasReachedTropics: this.hasReachedTropics,
             hasTalkedToElara: this.hasTalkedToElara,
+            hasTalkedToBoatman: this.hasTalkedToBoatman,
             hasMap: this.hasMap,
+            hasBoat: this.hasBoat,
             hasLevelUpAbility: this.hasLevelUpAbility,
+            bossDefeated: { ...(this.bossDefeated || {}) },
+            enemyKillCounts: this._normalizeEnemyKillCounts(this.enemyKillCounts),
             gameTime: this.gameTime,
             settings: {
                 showHints: this.settings.showHints,
@@ -4669,6 +6453,15 @@ export class Game {
             this._fadeOutTitleMusic();
             this._fadeOutGameMusic();
             this._fadeOutDesertMusic();
+            // Hard-stop one-shot SFX so they don't keep playing silently in the
+            // background (they'd resume audibly the next time sound is enabled).
+            for (const sfx of [this.deathSound, this.textSound, this.swordSlashSound]) {
+                if (!sfx) continue;
+                try {
+                    sfx.pause();
+                    sfx.currentTime = 0;
+                } catch (_) { /* ignore */ }
+            }
         } else if (this.started) {
             this._startRealmMusic();
         } else {
@@ -4998,29 +6791,31 @@ export class Game {
     _fadeAudio(key, audio, target, duration, options = {}) {
         this._cancelAudioFade(key);
 
-        const startVolume = audio.volume;
+        const clampVolume = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+        const startVolume = clampVolume(audio.volume);
+        const targetVolume = clampVolume(target);
         const startTime = performance.now();
 
         const finish = () => {
-            audio.volume = target;
+            audio.volume = targetVolume;
             if (options.pauseOnComplete) audio.pause();
             if (options.resetOnComplete) {
                 try { audio.currentTime = 0; } catch (_) { /* ignore */ }
             }
             if (typeof options.restoreVolume === 'number') {
-                audio.volume = options.restoreVolume;
+                audio.volume = clampVolume(options.restoreVolume);
             }
             this.audioFadeHandles[key] = 0;
         };
 
-        if (duration <= 0 || Math.abs(startVolume - target) < 0.001) {
+        if (duration <= 0 || Math.abs(startVolume - targetVolume) < 0.001) {
             finish();
             return;
         }
 
         const tick = (now) => {
             const t = Math.min(1, (now - startTime) / duration);
-            audio.volume = startVolume + (target - startVolume) * t;
+            audio.volume = clampVolume(startVolume + (targetVolume - startVolume) * t);
 
             if (t >= 1) {
                 finish();

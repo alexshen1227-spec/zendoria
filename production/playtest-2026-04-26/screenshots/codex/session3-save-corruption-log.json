@@ -1,0 +1,136 @@
+{
+  "results": [
+    {
+      "case": "reload-mid-movement",
+      "reloadResult": {
+        "_type": "Response",
+        "_guid": "response@8c669bd8800d17047d3aab05a877630d"
+      },
+      "savePrefix": "{\"currentRealmId\":\"driftmere\",\"player\":{\"x\":384,\"y\":544,\"health\":5,\"maxHealth\":5,\"attackDamage\":1,\"level\":1,\"xp\":0,\"dire"
+    },
+    {
+      "case": "clear-localstorage-mid-game",
+      "saveAfterClear": "{\"currentRealmId\":\"driftmere\",\"player\":{\"x\":384,\"y\":544,\"health\":5,\"maxHealth\":5,\"attackDamage\":1,\"level\":1,\"xp\":0,\"direction\":2,\"facingLeft\":false,\"skills\":{},\"skillPoints\":0},\"enemies\":[{\"kind\":\"bli"
+    },
+    {
+      "case": "multi-tab-save-collision",
+      "sameSave": true,
+      "savePrefix": "{\"currentRealmId\":\"driftmere\",\"player\":{\"x\":355.2000000000002,\"y\":544,\"health\":5,\"maxHealth\":5,\"attackDamage\":1,\"level\":1,\"xp\":0,\"direction\":1,\"facingLeft\":true,\"skills\":{},\"skillPoints\":0},\"enemies\":"
+    },
+    {
+      "case": "invalid-json",
+      "xss": false,
+      "saveAfter": "{ this is not json",
+      "url": "http://127.0.0.1:8765/?v=20260425-sidequests",
+      "title": "Zendoria - Driftmere Isle"
+    },
+    {
+      "case": "missing-fields",
+      "xss": false,
+      "saveAfter": "{\"currentRealmId\":\"driftmere\",\"player\":{\"x\":384,\"y\":544,\"health\":5,\"maxHealth\":5,\"attackDamage\":1,\"level\":1,\"xp\":0,\"direction\":2,\"facingLeft\":false,\"skills\":{},\"skillPoints\":0},\"enemies\":[{\"kind\":\"blightworm\",\"alive\":true,\"x\":690,\"y\":338,\"health\":3,\"",
+      "url": "http://127.0.0.1:8765/?v=20260425-sidequests",
+      "title": "Zendoria - Driftmere Isle"
+    },
+    {
+      "case": "wrong-types",
+      "xss": false,
+      "saveAfter": "{\"currentRealmId\":\"driftmere\",\"player\":{\"x\":384,\"y\":544,\"health\":null,\"maxHealth\":5,\"attackDamage\":1,\"level\":1,\"xp\":0,\"direction\":2,\"facingLeft\":false,\"skills\":{},\"skillPoints\":0},\"enemies\":[{\"kind\":\"blightworm\",\"alive\":true,\"x\":690,\"y\":338,\"health\":",
+      "url": "http://127.0.0.1:8765/?v=20260425-sidequests",
+      "title": "Zendoria - Driftmere Isle"
+    },
+    {
+      "case": "xss-currentRealmId",
+      "xss": false,
+      "saveAfter": "{\"currentRealmId\":\"driftmere\",\"player\":{\"x\":384,\"y\":544,\"health\":5,\"maxHealth\":5,\"attackDamage\":1,\"level\":1,\"xp\":0,\"direction\":2,\"facingLeft\":false,\"skills\":{},\"skillPoints\":0},\"enemies\":[],\"realmStates\":{\"driftmere\":{\"enemies\":[],\"enemySpawnNodes\":[",
+      "url": "http://127.0.0.1:8765/?v=20260425-sidequests",
+      "title": "Zendoria - Driftmere Isle"
+    }
+  ],
+  "logs": [
+    {
+      "page": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "tab2",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "tab2",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria save read failed: SyntaxError: Expected property name or '}' in JSON at position 2 (line 1 column 3)\n    at JSON.parse (<anonymous>)\n    at Game._readSaveData (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:6411:31)\n    at Game._titleHelpText (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:1252:35)\n    at Game._syncTitleMenu (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:1247:37)\n    at new Game (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:216:14)\n   "
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria save read failed: SyntaxError: Expected property name or '}' in JSON at position 2 (line 1 column 3)\n    at JSON.parse (<anonymous>)\n    at Game._readSaveData (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:6411:31)\n    at Game._titleHelpText (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:1252:35)\n    at Game._syncTitleMenu (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:1247:37)\n    at Game._moveTitleSelection (http://127.0.0.1:8765/js/game.js?v=20260425-sidequ"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria save read failed: SyntaxError: Expected property name or '}' in JSON at position 2 (line 1 column 3)\n    at JSON.parse (<anonymous>)\n    at Game._readSaveData (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:6411:31)\n    at Game._loadFromMenu (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:1360:27)\n    at Game._activateTitleSelection (http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:1217:22)\n    at http://127.0.0.1:8765/js/game.js?v=20260425-sidequests:405:26"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    },
+    {
+      "page": "main",
+      "type": "warning",
+      "text": "Zendoria title voice play failed: AbortError: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22"
+    }
+  ]
+}

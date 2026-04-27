@@ -586,3 +586,72 @@ body::before {
         padding: 14px;
     }
 }
+
+.admin-panel {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    background: rgba(7, 11, 19, 0.94);
+    border: 2px solid #ff5577;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: monospace;
+    color: #ffe7ee;
+    width: 230px;
+    box-shadow: 0 0 24px rgba(255, 85, 119, 0.35);
+}
+.admin-panel.hidden { display: none; }
+.admin-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    color: #ff8aa3;
+    font-size: 11px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #ff5577;
+    padding-bottom: 4px;
+}
+.admin-panel-close {
+    background: transparent;
+    color: #ffaabb;
+    border: 1px solid #ff5577;
+    cursor: pointer;
+    padding: 0 6px;
+    font-family: monospace;
+}
+.admin-panel-close:hover { background: #ff5577; color: #fff; }
+.admin-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.admin-panel-body button {
+    background: #1a2030;
+    border: 1px solid #4a5b78;
+    color: #cfe3ff;
+    padding: 5px 8px;
+    text-align: left;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 11px;
+}
+.admin-panel-body button:hover {
+    background: #2a3550;
+    border-color: #8df7d2;
+    color: #fff;
+}
+.admin-panel-body button[data-admin-action="grantAll"] {
+    background: #5a1f2e;
+    border-color: #ff5577;
+    color: #ffd5e0;
+    font-weight: bold;
+    margin-top: 4px;
+}
+.admin-panel-foot {
+    margin: 6px 0 0;
+    font-size: 9px;
+    color: #888;
+    text-align: center;
+}

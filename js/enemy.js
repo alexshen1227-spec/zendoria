@@ -467,7 +467,7 @@ export class Enemy {
             this.stuckTimer = 0;
         }
 
-        if (this.biteCooldown <= 0 && this._overlaps(player.getHitbox())) {
+        if (this.biteCooldown <= 0 && this.health > 0 && this.state !== 'dying' && this.state !== 'dead' && this._overlaps(player.getHitbox())) {
             const pushX = toPlayerX === 0 ? 0 : toPlayerX / Math.abs(toPlayerX);
             const pushY = toPlayerY === 0 ? 0 : toPlayerY / Math.abs(toPlayerY);
             if (player.takeDamage(this.config.contactDamage, {

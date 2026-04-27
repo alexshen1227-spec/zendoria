@@ -1,0 +1,51 @@
+AI-ready transparent asset sheets
+
+1. Sand Worm Boss
+File name: sand_worm_boss_sheet_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\sand_worm_boss_sheet_ai_ready_transparent.png
+Notes: Transparent background, cleaned sheet, isolated sprite cutouts for AI reuse.
+
+2. Magic Pillar
+File name: magic_pillar_sheet_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\magic_pillar_sheet_ai_ready_transparent.png
+Notes: Transparent background, cleaned sheet, intact/damaged/destroyed states arranged for AI reuse.
+
+3. Overworld Tileset Curated
+File name: overworld_tileset_curated_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\overworld_tileset_curated_ai_ready_transparent.png
+Notes: Transparent background, curated overworld atlas with terrain, landmarks, ruins, caves, ports, ships, lighthouse, oasis, temple, and camp elements. Presentation text, borders, and tiny demo markers removed.
+
+4. Medieval Environment Pack Curated
+File name: medieval_environment_pack_curated_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\medieval_environment_pack_curated_ai_ready_transparent.png
+Notes: Transparent background, environment-first atlas from the mixed medieval sheet. Kept terrain, vegetation, props, statues, gravestones, fences, banners, buildings, towers, ruins, walls, columns, rocks, and bridge pieces. Character section intentionally omitted.
+
+5. Dark Fantasy Environment Pack Curated
+File name: dark_fantasy_environment_pack_curated_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\dark_fantasy_environment_pack_curated_ai_ready_transparent.png
+Notes: Transparent background, curated dark fantasy atlas with lava ground, rock tiles, crystals, river pieces, trees, mushrooms, vines, carts, treasure props, rugs, statues, tower, building, shrine, and temple doorway structures. Character row intentionally omitted.
+
+6. Wooden Rowboat Movement Sheet
+File name: wooden_rowboat_movement_sheet_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\wooden_rowboat_movement_sheet_ai_ready_transparent.png
+Notes: Transparent background, cleaned rowboat atlas with grouped directional movement and idle frames for top-down use. Grid, labels, and presentation framing removed.
+
+7. Boatman NPC Idle Sheet
+File name: boatman_npc_idle_sheet_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\boatman_npc_idle_sheet_ai_ready_transparent.png
+Notes: Transparent background, cleaned NPC idle/pose sheet with the boatman character and separated oar prop. Presentation text, grid, and framing removed.
+
+8. Boatman Dialogue Panel Intro
+File name: boatman_dialogue_panel_intro_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\boatman_dialogue_panel_intro_ai_ready_transparent.png
+Notes: Transparent background, cleaned dialogue cutout with neutral portrait, dialogue box, and continue prompt preserved.
+
+9. Boatman Dialogue Panel Offer
+File name: boatman_dialogue_panel_offer_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\boatman_dialogue_panel_offer_ai_ready_transparent.png
+Notes: Transparent background, cleaned dialogue cutout with smiling gesture portrait, dialogue box, and continue prompt preserved.
+
+10. Boatman Dialogue Panel Warning
+File name: boatman_dialogue_panel_warning_ai_ready_transparent.png
+Absolute path: C:\Users\dtm92\OneDrive\Zendoria\AI_Ready_Assets\boatman_dialogue_panel_warning_ai_ready_transparent.png
+Notes: Transparent background, cleaned dialogue cutout with skeptical scratching-head portrait, dialogue box, and continue prompt preserved.

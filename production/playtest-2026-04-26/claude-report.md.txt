@@ -1,0 +1,306 @@
+══ REPORT 2: CLAUDE CODE (Opus 4.7) ══
+# Zendoria Playtest Report — Claude (Opus 4.7)
+
+**Date:** 2026-04-26
+**Tester:** Claude Opus 4.7 (thorough qualitative tester)
+**Build:** dreamy-cohen-980df9 worktree, build tag `?v=50-openworld` (per `index.html` script tag) / `?v=20260414-no-bridge-pass2` (per `launch.bat`)
+**Method:** Local Python HTTP server (`launch.bat` → `serve.py 8765`), opened in Claude Code's headless Chromium preview.
+
+---
+
+## 0. UPFRONT: TEST ENVIRONMENT LIMITATIONS — please read first
+
+I was given the four-session protocol but I could not run it as designed. The two reasons matter for interpreting everything below:
+
+1. **Headless preview throttles `requestAnimationFrame`.** The Claude Code preview tool runs the page with `document.visibilityState === 'hidden'` and Chromium freezes the rAF loop in that state. I worked around this by driving `_loopInner(performance.now())` from a `setInterval(…, 33)` shim, which lets the game tick at ~30 fps. Spoofing `document.visibilityState='visible'` does **not** unblock rAF on its own (the browser uses a deeper signal). Net result: every screenshot/eval call competes for the JS thread with my manual loop, so timing-sensitive checks are noisy, and a few of my eval calls timed out at 30s.
+2. **The game can hang at startup on a fresh load.** On second and later page loads in this preview, the asset loader never resolved past the missing-asset failures (see §1) and `__zendoriaGame` stayed `undefined`. The game eventually surfaced a `ASSET LOAD FAILED. CHECK CONSOLE.` banner on the title screen, and the title menu became unresponsive to Space / Enter / Arrows. The very first cold load in this session worked correctly and let me get into Driftmere Isle for ~3 minutes of play; subsequent reloads did not.
+
+**What this means for the report:**
+- Findings tagged **[OBSERVED]** I confirmed in-game on the first successful load.
+- Findings tagged **[CONFIRMED-DATA]** I confirmed by inspecting runtime state via `preview_eval` (e.g. game state, network logs, console errors, CSS) — these are real, not artifacts.
+- Findings tagged **[INFERRED]** I did not directly verify under play but inferred from observed behavior; treat as hypotheses for the dev to confirm.
+- Findings tagged **[TESTER-ARTIFACT?]** I may be seeing my own preview-tool environment, not a real bug. Flagged for honesty so the dev can quickly dismiss.
+
+I was unable to complete Sessions 2–4 as separate runs because the preview wouldn't reliably re-enter gameplay after the first run ended. I've noted what each session would have probed and what I could glean from the partial play of Session 1.
+
+I screenshotted to the preview's inline image return; the preview MCP tool does not write JPEGs to disk, so the `screenshots/claude/` directory remains empty. The screen states I describe in §6 are reproducible by following the steps given.
+
+---
+
+## 1. CRITICAL BUGS (sorted by severity)
+
+### 1.1 [CONFIRMED-DATA] Missing core NPC and vehicle assets cause player-visible "ASSET LOAD FAILED" banner
+
+**Severity:** CRITICAL — visible to every first-time player on at least some browser/cache states.
+
+**What I saw:**
+- Title screen renders normally, menu options visible (`NEW GAME / LOAD GAME / OPTIONS / EXIT`).
+- A red/amber banner reading **`ASSET LOAD FAILED. CHECK CONSOLE.`** appears across the bottom of the canvas, on top of the controls hint area where it normally says "W/S OR ARROWS MOVE. SPACE SELECTS. NEW GAME: START A FRESH RUN ON DRIFTMERE ISLE."
+- On the failure path, **the title menu stops responding to Space/Enter/Arrow key presses** in this preview environment. A player would press NEW GAME → nothing happens → press more keys → still nothing.
+
+**Network log proof (from preview's network panel):**
+```
+GET /assets/sprites/npcs/boatman_idle.png             → 404 File not found
+GET /assets/ui/dialog/boatman_dialogue_1.png          → 404 File not found
+GET /assets/ui/dialog/boatman_dialogue_2.png          → 404 File not found
+GET /assets/ui/dialog/boatman_dialogue_3.png          → 404 File not found
+GET /assets/sprites/environment/rowboat_sheet.png     → 404 File not found
+GET /assets/sprites/environment/ai_sheet_2.png        → 404 File not found
+```
+Each of those 404s is requested 3–4 times in a row (the loader appears to retry).
+
+**Verified on disk:**
+- `assets/ui/dialog/` actually contains only `elara_dialogue_1.png` and `elara_dialogue_2.png`. No boatman portraits exist on disk at all.
+- `assets/sprites/npcs/` actually contains only `elara_idle_strip.png`. No `boatman_idle.png` exists.
+- `assets/sprites/environment/` does not contain `rowboat_sheet.png` or `ai_sheet_2.png` (lots of `foliage_prop_NN.png` and a `bridge_clean.png`, but not those two).
+
+**Why this matters even when the game DOES start:**
+Examining the runtime game object on the one successful load showed `g.boatman`, `g.boat`, and `g.ridingBoat` are real fields the game uses. So Driftmere Isle has a planned "boatman / rowboat" sequence that almost certainly references these missing assets. A player who reaches that NPC will at minimum see broken dialog portraits and an invisible boat — and worst case will trigger the same Promise rejection mid-game. The recent commit `0c7c5d4 Configure Game Studios for web stack + fix NPC sprite matte destruction` suggests there has already been NPC sprite churn; this looks like fallout from that.
+
+**Repro steps:**
+1. `launch.bat` (or `python serve.py 8765`).
+2. Open `http://127.0.0.1:8765/?v=50-openworld` with a clean cache (Hard Reload / DevTools network "Disable cache").
+3. Open DevTools console.
+4. Observe `Failed to load image: assets/ui/dialog/boatman_dialogue_1.png` (and the others above).
+5. Observe the `ASSET LOAD FAILED. CHECK CONSOLE.` banner on the title.
+6. (Sometimes — see §0.2) the menu becomes unresponsive.
+
+**Suggested fix priority:** ship the missing assets OR remove the references so the loader doesn't hard-fail. The current message ("CHECK CONSOLE.") is a developer message, not a player message.
+
+---
+
+### 1.2 [CONFIRMED-DATA] Pause overlay's `hidden` class does not actually hide it (CSS bug)
+
+**Severity:** Medium — visible regression, low player impact.
+
+**What I saw:**
+- After dismissing the pause menu (Esc → Resume), `pauseOverlay.classList.contains('hidden')` returned `true`, but `getComputedStyle(pauseOverlay).display` returned `'flex'`.
+- The CSS rule responsible is:
+  ```css
+  .overlay.hidden, .pause-overlay.hidden { opacity: 0; pointer-events: none; }
+  ```
+  i.e. the "hidden" state only sets `opacity: 0` and disables pointer events — it does **not** set `display: none` or `visibility: hidden`.
+- Other overlays in the same stylesheet are correctly written (`.death-overlay.hidden`, `.dialog-overlay.hidden`, `.title-modal.hidden`, etc. all set `display: none`).
+
+**Player impact:**
+- The pause panel still occupies layout/paint after closing.
+- During my session, screenshots taken right after Resume still showed the SETTINGS panel rendered on top of the gameplay even though `paused === false` and gameplay was advancing. This is consistent with an opacity transition that is mid-animation when the screenshot fires — the panel is at opacity 0 in the *final* state but the in-between is briefly visible.
+- For an accessibility-conscious player using high-contrast mode or a screen reader, an `opacity:0` element is still in the accessibility tree.
+
+**Suggested fix:** add `display: none` (or `visibility: hidden`) to that rule, OR convert it to a `transitionend`-driven hide.
+
+---
+
+### 1.3 [CONFIRMED-DATA] Synthetic `keyup` events do not clear keys from `input.held`
+
+**Severity:** Likely **TESTER-ARTIFACT** — but worth confirming with a real keyboard. Logged here because if it IS real, it's nasty.
+
+**What I saw:**
+- `input.held` is a plain object keyed by `event.code`. Dispatching `new KeyboardEvent('keydown',{code:'KeyD'})` correctly added `KeyD` to `held`. Dispatching the matching `keyup` did **not** remove it.
+- Multiple consecutive `keydown`s (W, A, S, D, arrows, all 8) accumulated in `held` and were never released.
+- `input.endFrame()` and `input.clearAll()` *do* clear them when called manually.
+
+**Why I think this is probably a tester artifact:**
+- A real, hardware-issued `keyup` has `isTrusted=true` and might take a different code path I can't see from preview.
+- If real `keyup`s were broken, the game would be unplayable for everyone — and the recent commit logs show feature work on combat/grind, implying play tests have happened.
+
+**What I'd ask the dev to verify:**
+- Open DevTools, type `g = window.__zendoriaGame; setInterval(()=>console.log(Object.keys(g.input.held)),500)` in a real Chrome tab, then walk around with WASD. If keys ever stay in `held` after release, this is real.
+
+---
+
+### 1.4 [INFERRED] No global error overlay when asset load fails partway
+
+The "ASSET LOAD FAILED. CHECK CONSOLE." banner only appears on title. If the loader is sometimes lenient and lets the game start despite missing assets, the player will hit `<broken sprite>` entities mid-game (e.g. boatman, rowboat) with no in-game indication that anything went wrong. Worth either: (a) hard-blocking start when *any* essential asset is missing, OR (b) replacing missing sprites with a clearly visible "missing" placeholder in dev mode.
+
+---
+
+## 2. DESIGN ISSUES — pacing, balance, controls, UX
+
+These are from my one successful Driftmere Isle play session. **[OBSERVED]** unless otherwise noted.
+
+### 2.1 HUD label "DRIFTMERE SHARDFANG" is ambiguous on first read
+
+The top-left HUD reads:
+```
+DRIFTMERE
+SHARDFANG     [sword icon]
+[HP bar     ___HP]
+ATK [bar]  DSH [bar]
+```
+
+I had to look twice to decide if "DRIFTMERE SHARDFANG" was:
+- the area name (Driftmere being the isle), or
+- the equipped weapon ("Shardfang" sounds like a sword), or
+- the player character's name.
+
+The sword icon nudges toward "weapon", but "Driftmere" is also the place the title screen just told me about, so my brain picked "place: Driftmere — sub-area: Shardfang" before it picked "weapon: Driftmere Shardfang." A label like `EQUIPPED:` above the name, or moving the area name to a separate banner, would resolve it. (If "Driftmere Shardfang" is intended as a poetic full name for the sword, that's actually charming — but it needs the icon to be a *visible weapon* and the location label to live somewhere else.)
+
+### 2.2 "ATK" and "DSH" bar abbreviations are unclear
+
+I correctly guessed DSH = dash. I never figured out what ATK is — is it an attack-charge meter? An attack timer? A combo gauge? The bar fills/empties without me understanding the cause/effect. **A new player sees a partially-full bar and doesn't know whether to wait for it or trigger something to use it.**
+
+Quick fix: hover/idle tooltip for the HUD, or replace ATK with a clearer icon (e.g. a sword silhouette refilling).
+
+### 2.3 Bottom controls hint mixes movement and combat too eagerly
+
+The first hint shown on game start is:
+```
+MOVE WITH WASD OR ARROWS.
+STEP IN, STRIKE, BACK OFF.
+```
+
+The first line is great. The second line is combat coaching on a screen with no enemies in line of sight. I read "STRIKE" before knowing what attack key was, and I haven't yet seen anything to strike. Recommend gating the combat phrasing until first enemy enters camera range or first time in attack range.
+
+### 2.4 Objective + ESC-MENU stacking on right is good — but the `ESC MENU` row is tiny next to the objective
+
+`OBJECTIVE: TALK TO ELARA` is appropriately prominent. `ESC MENU` below it competes with it tonally — same color/weight. After 30 minutes the ESC MENU reminder is noise; consider fading it after the player opens the pause menu once.
+
+### 2.5 [INFERRED] Tutorial NPC (Elara) is positioned *immediately* on top of player
+
+In my one successful play, after walking right and then up toward Elara, I ended up with the player at `(447, 516)` and Elara at `(448, 512)` — basically overlapping. The interact prompt `E: TALK TO ELARA` appeared correctly. But Elara's collision was blocking me from walking further up — meaning if the player runs straight at her, they'll bump into a static NPC and likely think their movement is broken before they realize they need E. Consider: (a) make Elara non-blocking until first interaction, OR (b) auto-trigger her dialog when player steps into a small radius for the first time, OR (c) have her wave and call out to draw the player toward E.
+
+### 2.6 [OBSERVED] Pause menu UX is genuinely good
+
+`SETTINGS` panel, ornate stone frame with mushrooms, options column with right-side action verbs (`GO / ON / ON / VIEW / LEAVE`). The action-verb column is a nice touch — it tells the player what activating that row will do, beyond the boring "press to toggle" affordance. Footer hint "ESC RESUMES. ENTER OR SPACE ACTIVATES THE SELECTED ROW." is dead clear. Keep this, propagate the pattern to other menus.
+
+### 2.7 [OBSERVED] Camera scroll feel
+
+The camera is locked to the player center. When I held D and walked right, the world scrolled, the player stayed centered, ELARA's nameplate slid into view nicely. Felt good — no jitter, no lerp judder. One nit: the rain particles seem to be screen-space rather than world-space (they didn't parallax with the camera), which slightly breaks immersion when scrolling fast — but it's a cheap effect that suits the retro tone. Not a fix-required item.
+
+---
+
+## 3. POLISH ITEMS — small visual / audio / text issues
+
+### 3.1 [OBSERVED] Two-canvas double-rendering in some screenshots
+
+Some of my screenshots showed the title canvas rendered twice side-by-side (e.g. the very first screenshot before I resized the viewport, and one during transition states). After resizing to 820×760 it stopped happening and a clean single canvas occupied the page. This is **probably a viewport-too-narrow + canvas style.width=768 thing where the canvas gets letterboxed and a second copy bleeds in from the right.** Verify that the `index.html` / `css/style.css` layout for `#game-container` uses a true centering wrapper that doesn't horizontally repeat the canvas at narrow widths. Fix: the page should letterbox in black, not duplicate.
+
+### 3.2 [OBSERVED] Bottom hint banner overlaps the game world
+
+The dark hint banner ("MOVE WITH WASD OR ARROWS / STEP IN, STRIKE, BACK OFF") covers maybe ~12% of the visible play area at the bottom. It vanished after I started moving (good — auto-hide on first input), but until then, anything happening in the bottom strip of the world was hidden. If a hostile spawned south of the player, the player wouldn't see the threat-line.
+
+Suggest either: (a) shrink to one short line in a corner, (b) move it to the *right* edge as a column, or (c) only show it for 4–5s then auto-hide regardless of input.
+
+### 3.3 [CONFIRMED-DATA] Cache-busting tag mismatch between launch.bat and index.html
+
+- `launch.bat` opens `http://127.0.0.1:8765/?v=20260414-no-bridge-pass2`.
+- `index.html`'s actual script tag is `<script type="module" src="js/main.js?v=50-openworld">`.
+
+So the URL bar query string is purely decorative — the actual ES module load uses the import-time tag in `main.js`. That's not broken (the script tag wins), but it's confusing for anyone debugging cache state.
+
+Suggest: have `launch.bat` open the URL with no query string, OR make the launch.bat tag match the in-tag tag, OR document that the URL `?v=` is ignored.
+
+### 3.4 [OBSERVED] Title screen voice / music gesture-unlock
+
+There's a `titleVoice` and `titleMusic` system per the runtime state — I didn't hear audio because the preview is muted by default. Verify on real hardware: (a) does the title voice ever play before the user clicks (Chromium will block it without a gesture)? (b) does music ducking work correctly when transitioning to gameplay?
+
+### 3.5 [OBSERVED] Top-right minimap appeared after I moved a few tiles
+
+A small minimap fragment is in the top-right corner once you've walked a bit (it grows the visited area, fog-of-war style). Cool feature. Concern: it's small enough at first that I didn't realize it was there until I looked closely — verify it's still readable for users with poor vision / on small displays. Consider a brief "+ MAP UNLOCKED" toast the first time fog-of-war gets revealed.
+
+### 3.6 Text consistency
+
+- `OBJECTIVE: TALK TO ELARA` — clear.
+- `E: TALK TO ELARA` interact prompt — clear, matches.
+- `MOVE WITH WASD OR ARROWS. STEP IN, STRIKE, BACK OFF.` — different voice, more flavor; fine.
+- `ESC RESUMES. ENTER OR SPACE ACTIVATES THE SELECTED ROW.` — clear but a bit verbose; a player who plays twice has memorized this and now it's wallpaper.
+
+Voice/tone is mostly consistent; just tighten the longer hints over time.
+
+### 3.7 Asset retry storm in network logs
+
+Each missing asset is requested 3 or 4 times back-to-back (`[21576.630, .752, .874, .995]`). Whether that's intentional retry-on-fail or accidental triple-load via multiple consumers, it's a noticeable network burst on a slow connection. Worth checking that the loader caches the *failure* of an asset rather than retrying. Looking at the timestamps, the retries are about 100–125 ms apart, which suggests it isn't an exponential-backoff retry; it's the same asset being requested by multiple modules in parallel.
+
+---
+
+## 4. POSITIVE OBSERVATIONS — what works
+
+### 4.1 The art carries the game
+
+The title screen is genuinely beautiful — the warm orange galaxy / cool blue portal / purple mushroom complementary palette, the ruined arch with vines, the campfire. It does the job of a title screen: tells you the game has aesthetic identity, sets a mood (cosmic + decayed-ruin + mushroomy), and primes you to expect mystery. Same for the in-world tile art — green grass with stair-stepped ledges, the glowing crystal totem, Elara's blue-magic-staff silhouette, the rain particles. **For a vanilla Canvas-2D solo build, this looks like a small studio's work, not a hobby project.**
+
+### 4.2 Onboarding signposts are present and well-placed
+
+- Title screen tells you the controls AND tells you what New Game means ("START A FRESH RUN ON DRIFTMERE ISLE.").
+- HUD has an `ESC MENU` reminder.
+- Movement tutorial appears as soon as you spawn.
+- The first NPC is yellow-nameplated and your objective is "TALK TO ELARA" matching her literal name.
+- The interact prompt at the bottom is timing-perfect: it appears the moment you're close enough.
+
+That's a *lot* of layered hand-holding for a 1–2 minute first-time experience. None of it felt patronizing.
+
+### 4.3 Menu polish details that pay off
+
+The pause SETTINGS panel:
+- Themed stone-and-vine frame matching world art.
+- A purple mushroom and a blue mushroom on the bottom corners — same palette as the title.
+- Right-aligned action verbs (GO/ON/VIEW/LEAVE) that read like decision affordances rather than UI cruft.
+- Footer with two-line key hint.
+
+This is the kind of polish that takes 15 minutes per menu but pays off across the game's lifetime.
+
+### 4.4 Game state introspection is excellent (bonus, dev-side)
+
+Exposing `__zendoriaGame` on `window` gave me a debugging hook that let me write a partial report at all. Whether that's intended for production or just dev-mode, it's a smart pattern. (For prod release: gate it behind a `?debug=1` flag.)
+
+### 4.5 HUD feels game-y
+
+The HP / ATK / DSH stack with a sword icon and the "DRIFTMERE SHARDFANG" name (despite §2.1 nit) reads as a stat block, not a generic indicator strip. The minimap-in-corner pattern is classic JRPG.
+
+---
+
+## 5. SUGGESTED PRIORITY — top 3 fixes if Alex only had time for 3 before publishing
+
+1. **Ship the missing boatman / rowboat / `ai_sheet_2` assets, OR strip references to them.** Right now the game fails its asset preload and shows the player a developer message ("CHECK CONSOLE.") on the title, sometimes locking them out of starting at all. This is the only finding that breaks "first 30 seconds" for an unprepared player. Fix this and the title works again.
+
+2. **Fix the `.pause-overlay.hidden` CSS** (add `display: none` or equivalent) so the pause panel actually disappears when dismissed, not just becomes transparent. Visible during normal play; quick fix; no downside.
+
+3. **Disambiguate the HUD top-left.** Either label "DRIFTMERE SHARDFANG" with an `EQUIPPED:` prefix and put a real area name banner somewhere else, OR replace it with the player's name and move the weapon to its own row. Plus: spell out ATK / DSH the first time the player sees them. This is the only design concern of the four I logged that touches every minute of every session.
+
+(Honorable mention #4 if there's a 5-minute window: pull "STEP IN, STRIKE, BACK OFF." out of the very first hint banner so combat coaching doesn't appear before the player has met an enemy.)
+
+---
+
+## 6. SESSION LOG (raw timeline, partial)
+
+For the dev's own repro / cross-comparison with the other two AI testers.
+
+| Wall time (UTC) | Event |
+|---|---|
+| 22:36:57 | Cleared `localStorage`, navigated to `/?v=20260414-no-bridge-pass2`. Title screen rendered cleanly. Cursor on `NEW GAME`. Bottom hint visible. |
+| ~22:38   | Pressed Space (synthetic) → game transitioned to gameplay. Spawned at (389, 544) on `driftmere`. HUD visible. ELARA nameplate up-and-right. |
+| ~22:42   | First movement detected after I built `__pressKey/__zu/__zt` helpers. Discovered synthetic-keyup-not-clearing-held quirk (§1.3). |
+| ~22:45   | Discovered preview's `document.visibilityState='hidden'` was freezing the rAF loop. Spoofing visibility didn't help. Built a `setInterval(_loopInner,33)` shim — game loop began ticking. |
+| ~22:48   | Player walked right 57.6 px; world scrolled. ELARA grew larger, top-right minimap fragment appeared. |
+| ~22:52   | Walked W into Elara's tile. Got blocked by her collision. Bottom prompt `E: TALK TO ELARA` appeared. |
+| ~22:54   | Pressed E — `g.dialog` populated with `{images, index, soundTimer, grantMapAfter}`. Interact prompt persisted in screenshot — see §1.4. |
+| ~22:55   | Eval started timing out (manual loop contention). Server eventually disconnected. |
+| ~23:00–23:25 | Multiple attempts to restart from a fresh load. On every reload after the first, `__zendoriaGame` stayed `undefined` because of the asset-load failures (§1.1). Title eventually surfaced `ASSET LOAD FAILED. CHECK CONSOLE.` banner. Sessions 2–4 not runnable. |
+
+### Session 2 / 3 / 4 — what I would have probed (for comparison with the other testers)
+
+- **Session 2 (Speedrunner):** Dash routing. Whether holding F/Shift mid-attack interrupts the swing. Whether walking/dashing into a portal mid-attack causes a stuck state. Whether the boatman→rowboat sequence is skippable or required. Out-of-bounds via dash through edge tiles (dash speed 260 vs walk speed 72 = 3.6x — likely sufficient to clip narrow corner colliders if any are missing).
+- **Session 3 (Completionist):** Fog-of-war minimap completion check. Lore stones / shrines / crystal interactions per the recent commits ("lore stones, shrines, crystals, livelier spawns"). Whether ALL the NPCs implied by `g.npcs` and `g.elara` and `g.boatman` are reachable, given the boatman/rowboat asset gap. Skill tree exhaustion (skill points 0 → cap).
+- **Session 4 (Goblin mode):** Hammer Esc-menu open/close cycle for state corruption (especially given §1.2). Spam dash + attack to test combo meter / `wormHeart` / `amberwake` interactions. Try interacting (E) while in dialog. Try opening world map (M) and skill tree (K) simultaneously. Refresh during save (saveTimer is constantly incrementing — a refresh at exactly the wrong frame might leave a corrupt `zendoria-save-v1`).
+
+If the dev re-opens this file and runs it on a non-headless browser, the fastest way to make Sessions 2–4 productive is probably: fix §1.1 first (so reloads work), then run them in order. The protocol is good; my environment is what failed me, not the test design.
+
+---
+
+## 7. CONFIDENCE NOTES FOR PANEL COMPARISON
+
+If the other two AI testers report any of:
+
+- **"Game won't start" / "ASSET LOAD FAILED" / "boatman missing"** — that's almost certainly real (§1.1).
+- **"Pause menu doesn't go away"** — likely real (§1.2).
+- **"WASD doesn't move me"** — could be the §1.3 keyup-not-clearing thing. Cross-check: did they use real keyboard input or synthetic events? If real keyboard, that's a HUGE bug; if synthetic, it might just be the same artifact I hit.
+- **"What does ATK bar do?"** — real UX gap (§2.2). High consensus expected.
+- **"HUD is confusing"** — likely §2.1.
+
+If the other testers DON'T report §1.1 — they may have hit a friendly cache state (assets cached from a previous run). Tell them to hard-reload and re-test.
+
+---
+
+*End of report. — Claude Opus 4.7, 2026-04-26.*
+

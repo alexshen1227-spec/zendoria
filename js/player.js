@@ -1,9 +1,10 @@
 import { DIR, PLAYER_FRAME_H, PLAYER_FRAME_W, PLAYER_SPEED } from './constants.js?v=20260414-no-bridge-pass2';
 
-export const MAX_PLAYER_LEVEL = 15;
+export const MAX_PLAYER_LEVEL = 25;
 
 export function xpToNextLevel(level) {
-    // Amberwake curve: L1->2=46, L5->6=350, L10->11=1000, L14->15=1736
+    // Amberwake curve: L1->2=46, L5->6=350, L10->11=1000, L24->25=4416.
+    // Reaching 25 grants 24 skill points — exactly enough to max every node.
     return level * 40 + level * level * 6;
 }
 
@@ -382,6 +383,30 @@ export class Player {
         return true;
     }
 
+    /**
+     * Mnemoforge respec — wipes all spent skill ranks and refunds the points.
+     * Caller is responsible for any XP tax (Mnemoforge feeds on memory).
+     * Returns the number of points refunded.
+     */
+    resetSkills() {
+        let refunded = 0;
+        for (const id of Object.keys(this.skills)) {
+            // Guard against non-numeric values from malformed/legacy save state.
+            const rank = Number(this.skills[id]);
+            if (Number.isFinite(rank) && rank > 0) refunded += rank;
+        }
+        this.skills = {};
+        this.skillPoints += refunded;
+        // Clear transient skill-derived state that might linger.
+        this.pendingAmberwakeCleave = false;
+        this.amberwakeCounter = 0;
+        this.killHasteTimer = 0;
+        this.wormHeartReady = true;
+        this.wormHeartCooldown = 0;
+        this.applySkillEffects({ heal: false });
+        return refunded;
+    }
+
     gainXp(amount) {
         if (amount <= 0 || this.level >= MAX_PLAYER_LEVEL) return { levelsGained: 0, pointsGained: 0 };
 
@@ -491,12 +516,15 @@ export class Player {
             }
         }
 
+        // While riding the boat the player IS the boat — no dashes or sword swings.
+        const ridingBoat = this.collisionMode === 'boat';
+
         // Dash input: ShiftLeft / ShiftRight / KeyF. Queues a dash in the current
         // movement direction, or the facing direction if standing still.
-        const dashRequested =
+        const dashRequested = !ridingBoat && (
             input.wasPressed('ShiftLeft') ||
             input.wasPressed('ShiftRight') ||
-            input.wasPressed('KeyF');
+            input.wasPressed('KeyF'));
         if (dashRequested && this.dashCharges > 0 && this.dashCooldownTimer <= 0 && this.dashTimer <= 0 && this.attackTimer <= 0) {
             this.dashCharges = Math.max(0, this.dashCharges - 1);
             this.dashRechargeTimer = 0;
@@ -521,7 +549,7 @@ export class Player {
             else if (this.dashDir.x > 0.05) this.facingLeft = false;
         }
 
-        if ((input.wasPressed('Space') || input.wasPressed('KeyJ') || input.wasLeftClicked()) && this.attackCooldownTimer <= 0 && this.dashTimer <= 0) {
+        if ((input.wasPressed('Space') || input.wasPressed('KeyJ') || input.wasLeftClicked()) && this.attackCooldownTimer <= 0 && this.dashTimer <= 0 && !ridingBoat) {
             this._startAttack();
         }
 
@@ -780,13 +808,14 @@ export class Player {
     }
 
     _move(dx, dy, world) {
+        const mode = this.collisionMode || 'walker';
         const hitbox = this.getHitbox();
-        if (!world.collides(hitbox.x + dx, hitbox.y, hitbox.w, hitbox.h)) {
+        if (!world.collides(hitbox.x + dx, hitbox.y, hitbox.w, hitbox.h, mode)) {
             this.x += dx;
         }
 
         const movedHitbox = this.getHitbox();
-        if (!world.collides(movedHitbox.x, movedHitbox.y + dy, movedHitbox.w, movedHitbox.h)) {
+        if (!world.collides(movedHitbox.x, movedHitbox.y + dy, movedHitbox.w, movedHitbox.h, mode)) {
             this.y += dy;
         }
     }

@@ -1,0 +1,411 @@
+{
+  "pagesRemaining": 2,
+  "finalText": "ASSET LOAD FAILED. CHECK CONSOLE.\n\nRESUME\nGO\nSOUND\nON\nHINTS\nON\nCONTROLS\nVIEW\nRETURN TO TITLE\nLEAVE\n\nESC RESUMES. LEFT OR RIGHT TOGGLES SOUND AND HINTS.",
+  "eventsSummary": {
+    "errors": 53,
+    "warnings": 36,
+    "closes": 0
+  },
+  "sampleEvents": [
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Error: Failed to load image: assets/sprites/npcs/boatman_idle.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for mira-tide-medic Error: Failed to load image: assets/sprites/npcs/generated/mira-tide-medic.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for cadrin-lantern-keeper Error: Failed to load image: assets/sprites/npcs/generated/cadrin-lantern-keeper.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for nyra-wayfinder Error: Failed to load image: assets/sprites/npcs/generated/nyra-wayfinder.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for eamon-wreck-diver Error: Failed to load image: assets/sprites/npcs/generated/eamon-wreck-diver.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for suri-stone-reader Error: Failed to load image: assets/sprites/npcs/generated/suri-stone-reader.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for dax-canyon-lookout Error: Failed to load image: assets/sprites/npcs/generated/dax-canyon-lookout.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for veya-salt-scribe Error: Failed to load image: assets/sprites/npcs/generated/veya-salt-scribe.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for ila-herbalist Error: Failed to load image: assets/sprites/npcs/generated/ila-herbalist.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for bronn-road-smith Error: Failed to load image: assets/sprites/npcs/generated/bronn-road-smith.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for orra-watch-captain Error: Failed to load image: assets/sprites/npcs/generated/orra-watch-captain.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for kael-burnt-guide Error: Failed to load image: assets/sprites/npcs/generated/kael-burnt-guide.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for tovin-tide-cartographer Error: Failed to load image: assets/sprites/npcs/generated/tovin-tide-cartographer.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for luma-shell-courier Error: Failed to load image: assets/sprites/npcs/generated/luma-shell-courier.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for fenn-moon-ferrier Error: Failed to load image: assets/sprites/npcs/generated/fenn-moon-ferrier.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for qira-salt-glasswright Error: Failed to load image: assets/sprites/npcs/generated/qira-salt-glasswright.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for tamas-cinder-runner Error: Failed to load image: assets/sprites/npcs/generated/tamas-cinder-runner.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for neve-root-singer Error: Failed to load image: assets/sprites/npcs/generated/neve-root-singer.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for halden-starherd Error: Failed to load image: assets/sprites/npcs/generated/halden-starherd.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "browser",
+      "type": "back-error",
+      "text": "keyboard.press: Unknown key: \"Left\""
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Error: Failed to load image: assets/sprites/npcs/boatman_idle.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for mira-tide-medic Error: Failed to load image: assets/sprites/npcs/generated/mira-tide-medic.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for eamon-wreck-diver Error: Failed to load image: assets/sprites/npcs/generated/eamon-wreck-diver.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for nyra-wayfinder Error: Failed to load image: assets/sprites/npcs/generated/nyra-wayfinder.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for cadrin-lantern-keeper Error: Failed to load image: assets/sprites/npcs/generated/cadrin-lantern-keeper.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for suri-stone-reader Error: Failed to load image: assets/sprites/npcs/generated/suri-stone-reader.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for dax-canyon-lookout Error: Failed to load image: assets/sprites/npcs/generated/dax-canyon-lookout.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for veya-salt-scribe Error: Failed to load image: assets/sprites/npcs/generated/veya-salt-scribe.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    },
+    {
+      "label": "main",
+      "type": "warning",
+      "text": "Zendoria: optional generated NPC art failed for ila-herbalist Error: Failed to load image: assets/sprites/npcs/generated/ila-herbalist.png\n    at img.onerror (http://127.0.0.1:8765/js/sprite.js?v=20260414-no-bridge-pass2:44:36)"
+    }
+  ]
+}

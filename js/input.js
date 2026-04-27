@@ -27,6 +27,27 @@ export class Input {
         window.addEventListener('mouseup', (event) => {
             if (event.button === 0) this.mouseHeld = false;
         });
+
+        // Clear stuck inputs when window loses focus or visibility — otherwise
+        // a held key during alt-tab can leave the player walking forever.
+        const clearAll = () => {
+            this.held = {};
+            this.pressed = {};
+            this.mouseHeld = false;
+            this.mousePressed = false;
+        };
+        window.addEventListener('blur', clearAll);
+        window.addEventListener('contextmenu', clearAll);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) clearAll();
+        });
+    }
+
+    clearAll() {
+        this.held = {};
+        this.pressed = {};
+        this.mouseHeld = false;
+        this.mousePressed = false;
     }
 
     isDown(code) {

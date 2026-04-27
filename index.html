@@ -7,7 +7,8 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Zendoria - Driftmere Isle</title>
-    <link rel="stylesheet" href="css/style.css?v=20-polish">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/style.css?v=22-polish">
 </head>
 <body>
     <div id="game-container">
@@ -112,6 +113,27 @@
             </div>
         </div>
     </div>
-    <script type="module" src="js/main.js?v=50-openworld"></script>
+    <div id="admin-panel" class="admin-panel hidden" data-admin-panel>
+        <div class="admin-panel-header">
+            <span>ADMIN PANEL · TEST ONLY</span>
+            <button class="admin-panel-close" data-admin-close>X</button>
+        </div>
+        <div class="admin-panel-body">
+            <button data-admin-action="maxLevel">Grant Max Level</button>
+            <button data-admin-action="addSkillPoints">+10 Skill Points</button>
+            <button data-admin-action="grantRelic">Grant Sunken Relic (skills)</button>
+            <button data-admin-action="grantMap">Grant Map</button>
+            <button data-admin-action="defeatSandworm">Defeat Sandworm Boss</button>
+            <button data-admin-action="grantBoat">Grant Rowboat</button>
+            <button data-admin-action="healFull">Full Heal</button>
+            <button data-admin-action="killAllEnemies">Kill All Visible Enemies</button>
+            <button data-admin-action="teleportBoatman">Teleport To Boatman</button>
+            <button data-admin-action="teleportBoat">Teleport To Boat Spawn</button>
+            <button data-admin-action="teleportNextNpc">Teleport To Next NPC</button>
+            <button data-admin-action="grantAll">GRANT EVERYTHING</button>
+        </div>
+        <p class="admin-panel-foot">Press ` (backtick) to toggle</p>
+    </div>
+    <script type="module" src="js/main.js?v=20260425-sidequests"></script>
 </body>
 </html>
