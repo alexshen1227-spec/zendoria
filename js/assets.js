@@ -124,7 +124,20 @@ const GENERATED_NPC_FILES = {
 };
 
 function removeEdgeMatte(image, options = {}) {
-    const { mode = 'auto', threshold = 32 } = options;
+    const {
+        mode = 'auto',
+        threshold = 32,
+        // When true, after the edge flood we scan for any remaining
+        // matte-matching pixels (interior pockets the edge flood couldn't
+        // reach because anti-aliased boundary pixels formed a wall) and
+        // erase any blob whose connected-component size is >=
+        // minIsolatedBlobSize. Default is conservative to protect 1-3px
+        // artist highlights. Used for boatman_dialogue_3 where the artist
+        // painted disconnected white pockets the edge flood misses.
+        // Source: P0-3 from 2026-04-26 playtest meta-analysis.
+        stripIsolatedBlobs = false,
+        minIsolatedBlobSize = 10,
+    } = options;
 
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
@@ -206,6 +219,50 @@ function removeEdgeMatte(image, options = {}) {
         enqueue(x + 1, y);
         enqueue(x, y - 1);
         enqueue(x, y + 1);
+    }
+
+    if (stripIsolatedBlobs) {
+        // Second pass: any pixel still matching the matte rule with non-zero
+        // alpha is in an interior pocket the edge flood couldn't reach.
+        // Flood-fill it; if the blob is >= minIsolatedBlobSize, zero its alpha.
+        // Smaller blobs are likely artist highlights and are preserved.
+        const blobVisited = new Uint8Array(width * height);
+        const blobQueue = [];
+        for (let py = 0; py < height; py++) {
+            for (let px = 0; px < width; px++) {
+                const pIdx = py * width + px;
+                if (visited[pIdx] || blobVisited[pIdx]) continue;
+                const p4 = pIdx * 4;
+                if (data[p4 + 3] === 0) continue;
+                if (!matches(p4)) continue;
+
+                const blobPixels = [];
+                blobQueue.length = 0;
+                blobQueue.push(pIdx);
+                blobVisited[pIdx] = 1;
+                while (blobQueue.length > 0) {
+                    const k = blobQueue.pop();
+                    blobPixels.push(k);
+                    const kx = k % width;
+                    const ky = Math.floor(k / width);
+                    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+                        const nx = kx + dx;
+                        const ny = ky + dy;
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                        const nIdx = ny * width + nx;
+                        if (blobVisited[nIdx] || visited[nIdx]) continue;
+                        const n4 = nIdx * 4;
+                        if (data[n4 + 3] === 0) continue;
+                        if (!matches(n4)) continue;
+                        blobVisited[nIdx] = 1;
+                        blobQueue.push(nIdx);
+                    }
+                }
+                if (blobPixels.length >= minIsolatedBlobSize) {
+                    for (const k of blobPixels) data[k * 4 + 3] = 0;
+                }
+            }
+        }
     }
 
     ctx.putImageData(imageData, 0, 0);
@@ -746,7 +803,15 @@ export async function loadGameAssets() {
         boatmanIdleFrames,
         boatmanDialog1: removeEdgeMatte(boatmanDialog1, { mode: 'light', threshold: 28 }),
         boatmanDialog2: removeEdgeMatte(boatmanDialog2, { mode: 'light', threshold: 28 }),
-        boatmanDialog3: removeEdgeMatte(boatmanDialog3, { mode: 'light', threshold: 28 }),
+        // Panel 3 has 3-4x more isolated interior white pockets than 1/2.
+        // Strip those blobs after the edge flood; min size 10 protects
+        // small artist highlights. Source: P0-3 from playtest meta.
+        boatmanDialog3: removeEdgeMatte(boatmanDialog3, {
+            mode: 'light',
+            threshold: 28,
+            stripIsolatedBlobs: true,
+            minIsolatedBlobSize: 10,
+        }),
         npcGeneratedVariants,
         npcVariants,
         rowboatSprite: fitSpriteToBox(
