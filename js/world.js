@@ -105,8 +105,13 @@ export class World {
         this.rows = 72;
         this.cols = 104;
 
+        // Player must spawn far enough from Elara that they have clear walking
+        // space in any cardinal direction. Elara stands at (28*TILE, 32*TILE),
+        // so the start arrival sits 4 tiles south + same column -- ~96 px clear
+        // both south and east. Earlier (24*TILE, 34*TILE) felt wedged because
+        // Elara was directly NE of the spawn at ~71 px and blocked walking up.
         this.arrivalPoints = {
-            start: { x: 24 * TILE, y: 34 * TILE },
+            start: { x: 24 * TILE, y: 38 * TILE },
             fromFrontier: { x: 58 * TILE, y: 32 * TILE },
         };
         this.playerSpawn = { ...this.arrivalPoints.start };
