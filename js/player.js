@@ -576,6 +576,27 @@ export class Player {
         } else {
             const haste = this.killHasteTimer > 0 ? 1.25 : 1;
             const movementScale = (this.attackTimer > 0 ? 0.72 : 1) * haste;
+            // Per-tap impulse: a brushed keydown should produce a visible
+            // displacement even if the key is released within a frame. The
+            // velocity-only model leaks small inputs because they translate
+            // to ~1 px/frame at 60 fps. Adding ~5 px on each fresh keydown
+            // keeps held-key behavior (constant velocity) intact while making
+            // taps feel alive. Source: P1-4 from playtest meta-analysis.
+            const TAP_IMPULSE_PX = 5;
+            let tapDx = 0;
+            let tapDy = 0;
+            if (input.wasPressed('ArrowLeft') || input.wasPressed('KeyA')) tapDx -= 1;
+            if (input.wasPressed('ArrowRight') || input.wasPressed('KeyD')) tapDx += 1;
+            if (input.wasPressed('ArrowUp') || input.wasPressed('KeyW')) tapDy -= 1;
+            if (input.wasPressed('ArrowDown') || input.wasPressed('KeyS')) tapDy += 1;
+            if (tapDx !== 0 || tapDy !== 0) {
+                const mag = Math.hypot(tapDx, tapDy) || 1;
+                this._move(
+                    (tapDx / mag) * TAP_IMPULSE_PX * movementScale,
+                    (tapDy / mag) * TAP_IMPULSE_PX * movementScale,
+                    world,
+                );
+            }
             if (this.moving) {
                 const dx = move.x * this.speed * movementScale * dt;
                 const dy = move.y * this.speed * movementScale * dt;
