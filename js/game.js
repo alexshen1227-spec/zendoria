@@ -6626,10 +6626,15 @@ export class Game {
             this._resetSession();
             this._applySaveData(payload.snapshot);
             this.player.health = this.player.maxHealth;
+            // Respawn grace: 2.5s of i-frames so the player can orient before
+            // taking another hit. If the checkpoint was mid-fight, this stops
+            // the 'reload, immediately die again' loop Cheese's brother hit.
+            // Source: P1-3 from round 3 playtest.
+            this.player.invulnTimer = Math.max(this.player.invulnTimer, 2.5);
             this._saveGame();
             this._enterGameplay();
-            this.toast = `RELOADED · ${payload.label.toUpperCase()}`;
-            this.toastTimer = 2.4;
+            this.toast = `RELOADED · ${payload.label.toUpperCase()} · BRIEF INVULNERABILITY`;
+            this.toastTimer = 3.0;
             return;
         }
 
