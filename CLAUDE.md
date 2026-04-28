@@ -58,3 +58,21 @@ See `docs/COLLABORATIVE-DESIGN-PRINCIPLE.md` for full protocol and examples.
 ## Context Management
 
 @.claude/docs/context-management.md
+
+## Commit & Push Workflow
+
+After completing a logical unit of work:
+
+1. Use `git add -A && git commit -m "<clear message>"` to commit changes
+2. Make small commits, not giant ones — group by intent
+3. After committing, ASK the user if they want to push to GitHub (`git push`)
+4. NEVER push without explicit user approval, especially if:
+   - The change touches multiple systems
+   - Smoke tests haven't been run
+   - The change is experimental or risky
+5. The live site is at https://alexshen1227-spec.github.io/zendoria/ — pushes go live publicly within ~2 min
+
+For autonomous batches where the user has explicitly authorized auto-push:
+- Run smoke tests before pushing
+- Push only after smoke tests pass
+- If smoke test fails, commit but don't push, report the failure
