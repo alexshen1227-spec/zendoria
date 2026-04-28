@@ -279,13 +279,17 @@ body::before {
 
 .title-pointer-overlay {
     position: absolute;
-    left: 40.2%;
+    /* Expanded width so the clickable hit zone covers the menu labels in the
+       title artwork, not just the tiny pointer column. Trackpad players had
+       trouble clicking the original 3.6% strip. Source: P0-2 round 3. */
+    left: 38%;
     top: 77.8%;
-    width: 3.6%;
+    width: 22%;
     height: 17.6%;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    /* Re-enable mouse events; rows below get pointer:auto so clicks register. */
     pointer-events: none;
 }
 
@@ -293,7 +297,20 @@ body::before {
     flex: 1;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    /* Each row catches mouse events; rest of overlay stays click-through so
+       the rows don't bleed into each other vertically. */
+    pointer-events: auto;
+    cursor: pointer;
+    /* Subtle hover ring so trackpad players see which row will activate. */
+    border: 1px solid transparent;
+    border-radius: 3px;
+    transition: background-color 0.08s steps(2), border-color 0.08s steps(2);
+}
+
+.title-pointer-row:hover:not(.is-selected) {
+    background-color: rgba(255, 222, 138, 0.10);
+    border-color: rgba(255, 222, 138, 0.45);
 }
 
 .title-pointer {

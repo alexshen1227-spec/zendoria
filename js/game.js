@@ -86,8 +86,29 @@ export class Game {
 
         this.titleMenuImage = document.querySelector('[data-title-menu-image]');
         this.titlePointerRows = {};
-        for (const item of this.titleMenuItems) {
-            this.titlePointerRows[item.key] = document.querySelector(`[data-title-row="${item.key}"]`);
+        for (let i = 0; i < this.titleMenuItems.length; i++) {
+            const item = this.titleMenuItems[i];
+            const row = document.querySelector(`[data-title-row="${item.key}"]`);
+            this.titlePointerRows[item.key] = row;
+            if (!row) continue;
+            // Trackpad / mouse navigation: hovering a row sets the selection
+            // (so the keyboard pointer follows the mouse), and clicking a row
+            // activates that menu item the same as pressing Enter on it.
+            // Source: P0-2 from 2026-04-27 round 3 playtest (Emmett).
+            const targetIndex = i;
+            row.addEventListener('mouseenter', () => {
+                if (this.started || this.titleDialog) return;
+                if (this.titleMenuIndex === targetIndex) return;
+                this.titleMenuIndex = targetIndex;
+                this._syncTitleMenu();
+                this._playBeep(680, 0.05, 'square', 0.06);
+            });
+            row.addEventListener('click', () => {
+                if (this.started || this.titleDialog) return;
+                this.titleMenuIndex = targetIndex;
+                this._syncTitleMenu();
+                this._activateTitleSelection();
+            });
         }
 
         this.titleOptionRows = {};
