@@ -578,6 +578,12 @@ export class Game {
         this.boneglassShards = [];            // [{x,y,life,maxLife,vy,phase}]
 
         this.objectiveTimer = 8;
+        // When the OBJECTIVE text changes, pulse the HUD panel for ~2.5s
+        // so the player notices the new objective. Three humans (Mom,
+        // Victor, Cheese) reported losing track of where to go next.
+        // Source: P0-3 from 2026-04-27 round 3 playtest.
+        this.lastObjectiveText = null;
+        this.objectivePulseTimer = 0;
         this.toast = '';
         this.toastTimer = 0;
         // Important toast: a separate, larger, center-screen banner used
@@ -1940,6 +1946,7 @@ export class Game {
         this.screenShake = Math.max(0, this.screenShake - dt * 8);
         this.toastTimer = Math.max(0, this.toastTimer - dt);
         this.importantToastTimer = Math.max(0, this.importantToastTimer - dt);
+        this.objectivePulseTimer = Math.max(0, this.objectivePulseTimer - dt);
         this._updateLevelProgressFx(dt);
 
         this.saveTimer += dt;
@@ -5703,7 +5710,15 @@ export class Game {
             1 - (this.player.dashCooldownTimer / Math.max(0.0001, this.player.dashCooldown)),
             '#8effec');
 
-        const objectiveLines = this._wrapPixelText(this._currentObjectiveText(), 122);
+        const objectiveText = this._currentObjectiveText();
+        // Detect objective change so the panel can flash to draw the player's
+        // eye. Three humans (Mom, Victor, Cheese) reported losing track of
+        // 'where to go next' at transitions. P0-3 from round 3 playtest.
+        if (this.lastObjectiveText !== null && this.lastObjectiveText !== objectiveText) {
+            this.objectivePulseTimer = 2.5;
+        }
+        this.lastObjectiveText = objectiveText;
+        const objectiveLines = this._wrapPixelText(objectiveText, 122);
         // 'ESC MENU' reminder is only useful before the player has opened the
         // menu once. After they've used Esc, they know it's there, and the HUD
         // gets cleaner without the redundant prompt. Source: P1-6 from the
@@ -5719,11 +5734,27 @@ export class Game {
         const actionLineH = 8;
         const rightPanelH = Math.max(34, actionStartY - 6 + actionRows.length * actionLineH + 4);
 
+        // Pulse: bright glow border + bright text while objectivePulseTimer > 0.
+        const pulseStrength = Math.max(0, Math.min(1, this.objectivePulseTimer / 2.5));
+        const pulseFlash = pulseStrength > 0
+            ? Math.sin(this.gameTime * 8) * 0.5 + 0.5
+            : 0;
         ctx.fillStyle = 'rgba(7, 11, 19, 0.82)';
         ctx.fillRect(116, 6, 134, rightPanelH);
-        font.draw(ctx, 'OBJECTIVE', 122, 10, { color: '#fff1b5' });
+        if (pulseStrength > 0) {
+            ctx.strokeStyle = `rgba(255, 222, 138, ${0.35 + pulseFlash * 0.55 * pulseStrength})`;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(116.5, 6.5, 133, rightPanelH - 1);
+        }
+        const headerColor = pulseStrength > 0
+            ? (pulseFlash > 0.5 ? '#ffe78a' : '#fff1b5')
+            : '#fff1b5';
+        font.draw(ctx, 'OBJECTIVE', 122, 10, { color: headerColor });
+        const bodyColor = pulseStrength > 0
+            ? (pulseFlash > 0.5 ? '#fff6d3' : '#f1f5ff')
+            : '#f1f5ff';
         objectiveLines.forEach((line, index) => {
-            font.draw(ctx, line, 122, objectiveStartY + index * objectiveLineH, { color: '#f1f5ff' });
+            font.draw(ctx, line, 122, objectiveStartY + index * objectiveLineH, { color: bodyColor });
         });
         actionRows.forEach((line, index) => {
             font.draw(ctx, line, 122, actionStartY + index * actionLineH, {
