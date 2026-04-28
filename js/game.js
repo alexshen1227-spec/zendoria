@@ -143,7 +143,12 @@ export class Game {
         this.desertMusic = this._createAudio(this.assets.desertMusicSrc, true);
         this.deathSound = this._createAudio(this.assets.deathSoundSrc, false);
         if (this.deathSound) this.deathSound.volume = 1;
-        if (this.textSound) this.textSound.volume = 0.35;
+        // Typewriter loop volume: was 0.35, but Cheese reported it nearly hurt
+        // their ears on headphones at 3/4 system volume. Dropped 71% to 0.10
+        // so it's audibly present but comfortable. Keep frequency / pitch /
+        // character untouched -- only volume reduced.
+        // Source: P0-1 from 2026-04-27 round 3 playtest.
+        if (this.textSound) this.textSound.volume = 0.10;
         this.swordSlashSound = this._createAudio(this.assets.swordSlashSoundSrc, false);
         if (this.swordSlashSound) this.swordSlashSound.volume = 0.75;
         this.titleMusicStarted = false;
