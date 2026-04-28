@@ -825,6 +825,12 @@ export class Game {
                 }
                 // Re-read ability rows so locked skills become spendable.
                 this._syncAbilityLockedRows?.();
+                // Auto-checkpoint on this milestone so a player who dies
+                // post-boss without saving manually doesn't have to refight
+                // the sandworm. Source: P1-2 from round 3 playtest (Victor's
+                // 'died and forgot to save' worst-moment).
+                this._createCheckpoint('Sandworm Felled');
+                this._saveGame();
             }
         }
 

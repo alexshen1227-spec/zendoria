@@ -1,5 +1,5 @@
 import { loadGameAssets } from './assets.js?v=20260427-round2';
-import { Game } from './game.js?v=20260427-objective-pulse';
+import { Game } from './game.js?v=20260427-autocheckpoint';
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('resetSave') === '1') {
