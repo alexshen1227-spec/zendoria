@@ -38,6 +38,63 @@ const TITLE_MENU_STATE_SOURCES = {
 const TITLE_OPTION_KEYS = ['sound', 'hints'];
 const PAUSE_MENU_KEYS = ['resume', 'sound', 'hints', 'controls', 'return-title'];
 
+// === Day/Night cycle =======================================================
+// 8 minutes (480 s) for a full DAWN -> DAY -> DUSK -> NIGHT -> DAWN loop.
+// Phases are 120 s each. Color stops are linearly interpolated between
+// adjacent phases (with wrap from NIGHT back to DAWN), so transitions are
+// smooth and there are no hard cuts.
+//
+// Palette inspiration (from the title screen): warm-orange galaxy + cool
+// blue portal contrast. We pull dawn/dusk toward that warm side and night
+// toward the cool cosmic side. Day stays mostly neutral so the existing
+// art reads at full clarity. Night never goes black -- visibility is
+// preserved per the spec; the night feel is mood, not punishment.
+const DAY_CYCLE_DURATION = 480;          // seconds for a full cycle
+const DAY_PHASE_DURATION = 120;          // seconds per phase
+const DAY_PHASE_KEYS = ['DAWN', 'DAY', 'DUSK', 'NIGHT'];
+// Each stop is the color at the START of that phase. Lerp between stops.
+const DAY_PHASE_STOPS = [
+    // DAWN -- warm dawn rose, slight residual cool from the night
+    { r: 255, g: 160, b: 130, a: 0.18, night: 0.30 },
+    // DAY -- nearly clear, faintly cool so daylight reads as midday
+    { r: 220, g: 230, b: 255, a: 0.04, night: 0.0 },
+    // DUSK -- burnt orange leaning magenta as we slide into night
+    { r: 240, g: 130, b: 90, a: 0.22, night: 0.0 },
+    // NIGHT -- deep cosmic blue-purple. Strongest overlay alpha but capped
+    // around 0.40 so the world is still legible.
+    { r: 40, g: 35, b: 95, a: 0.40, night: 1.0 },
+];
+
+function dayCyclePalette(cycleTime) {
+    const t = ((cycleTime % DAY_CYCLE_DURATION) + DAY_CYCLE_DURATION) % DAY_CYCLE_DURATION;
+    // Phase stops are placed at the MIDDLE of each phase window so each
+    // phase has a meaningful feel-zone around its center. Interpolating
+    // from start-of-phase would mean the "purest" night was a single
+    // instant at t=360 followed by an immediate fade to dawn -- you'd
+    // never get to live in the night for very long. This way the
+    // night feel sits roughly t in [360, 480) with t=420 as the deepest
+    // moment, and each adjacent phase blends into its neighbors at the
+    // phase boundaries.
+    const colorT = ((t - DAY_PHASE_DURATION / 2) + DAY_CYCLE_DURATION) % DAY_CYCLE_DURATION;
+    const phaseFloat = colorT / DAY_PHASE_DURATION;
+    const i = Math.floor(phaseFloat) % 4;
+    const u = phaseFloat - Math.floor(phaseFloat);
+    const a = DAY_PHASE_STOPS[i];
+    const b = DAY_PHASE_STOPS[(i + 1) % 4];
+    // phaseKey reflects which 120s window we're in by name (DAWN, DAY, etc.)
+    // for HUD / save / debug. The COLOR uses the offset above.
+    const nameIndex = Math.floor(t / DAY_PHASE_DURATION) % 4;
+    return {
+        r: Math.round(a.r + (b.r - a.r) * u),
+        g: Math.round(a.g + (b.g - a.g) * u),
+        b: Math.round(a.b + (b.b - a.b) * u),
+        alpha: a.a + (b.a - a.a) * u,
+        nightFactor: Math.max(0, Math.min(1, a.night + (b.night - a.night) * u)),
+        phaseKey: DAY_PHASE_KEYS[nameIndex],
+        phaseProgress: (t % DAY_PHASE_DURATION) / DAY_PHASE_DURATION,
+    };
+}
+
 function rectsOverlap(a, b) {
     return (
         a.x < b.x + b.w &&
@@ -566,6 +623,11 @@ export class Game {
         this.bossVictoryTimer = 0;
         this.bossDefeated = { sandworm: false };
         this.gameTime = 0;
+        // Day/night cycle position in seconds (0..DAY_CYCLE_DURATION). Fresh
+        // game starts at the DAY phase (mid-cycle from DAWN) so first-time
+        // players see a clean readable world before the cycle drifts. Persists
+        // across save/load.
+        this.dayCycleTime = DAY_PHASE_DURATION; // start of DAY phase
         this.screenShake = 0;
 
         // Ouroboros Tremor — ambient world-event. Every ~2–5 minutes the
@@ -1671,6 +1733,11 @@ export class Game {
         }
 
         this.gameTime = Math.max(0, save.gameTime ?? 0);
+        // Restore day/night cycle position. Default: DAY phase mid-cycle so
+        // legacy saves without the field reload into clear daylight.
+        this.dayCycleTime = (typeof save.dayCycleTime === 'number' && isFinite(save.dayCycleTime))
+            ? ((save.dayCycleTime % DAY_CYCLE_DURATION) + DAY_CYCLE_DURATION) % DAY_CYCLE_DURATION
+            : DAY_PHASE_DURATION;
         this.currentRealmId = save.currentRealmId === 'frontier' || (
             !save.currentRealmId &&
             (!!save.hasReachedCanyons || !!save.hasReachedSaltFlats || !!save.hasReachedTropics || !!save.hasLevelUpAbility)
@@ -1783,6 +1850,11 @@ export class Game {
     }
 
     _update(dt) {
+        // Day/night cycle ticks alongside the world. When the player is in
+        // a menu (pause/dialog/death/title) the parent loop bails out before
+        // _update runs, so the cycle pauses with the world -- no time-skip
+        // exploit by sitting in a menu.
+        this.dayCycleTime = (this.dayCycleTime + dt) % DAY_CYCLE_DURATION;
         if (this.elara) this.elara.update(dt);
         if (this.boatman) this.boatman.update(dt);
         for (const npc of (this.npcs || [])) npc.update(dt);
@@ -4005,6 +4077,58 @@ export class Game {
         }
     }
 
+    _currentDayPalette() {
+        return dayCyclePalette(this.dayCycleTime);
+    }
+
+    _drawDayCycleOverlay(ctx) {
+        const p = this._currentDayPalette();
+        // Base atmospheric tint: a translucent solid wash. We deliberately
+        // skip multiply/screen blending here -- a simple alpha overlay is
+        // the most readable across all biomes and avoids muddying dark art.
+        ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${p.alpha.toFixed(3)})`;
+        ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+
+        // At night specifically, layer a soft cosmic vignette so the screen
+        // edges feel deeper than the center -- night should feel like
+        // standing in a clearing under stars, not a flat blue wash.
+        if (p.nightFactor > 0.05) {
+            const vig = ctx.createRadialGradient(
+                NATIVE_WIDTH / 2,
+                NATIVE_HEIGHT / 2,
+                Math.min(NATIVE_WIDTH, NATIVE_HEIGHT) * 0.22,
+                NATIVE_WIDTH / 2,
+                NATIVE_HEIGHT / 2,
+                Math.max(NATIVE_WIDTH, NATIVE_HEIGHT) * 0.65,
+            );
+            vig.addColorStop(0, 'rgba(20, 18, 60, 0)');
+            vig.addColorStop(1, `rgba(20, 18, 60, ${(0.32 * p.nightFactor).toFixed(3)})`);
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
+
+            // Tiny twinkling starfield -- six fixed positions in the upper
+            // half of the screen, each pulsing on its own phase. Cheap, but
+            // the eye reads it as 'oh, it's night out'.
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const stars = [
+                { x: 24,  y: 18, phase: 0.0 },
+                { x: 88,  y: 8,  phase: 1.4 },
+                { x: 142, y: 22, phase: 2.7 },
+                { x: 198, y: 12, phase: 0.6 },
+                { x: 232, y: 30, phase: 2.1 },
+                { x: 60,  y: 36, phase: 1.8 },
+            ];
+            for (const s of stars) {
+                const tw = (Math.sin(this.gameTime * 1.6 + s.phase) * 0.5 + 0.5);
+                const a = (0.45 * tw + 0.20) * p.nightFactor;
+                ctx.fillStyle = `rgba(225, 230, 255, ${a.toFixed(3)})`;
+                ctx.fillRect(s.x, s.y, 1, 1);
+            }
+            ctx.restore();
+        }
+    }
+
     _drawLowHealthVignette(ctx) {
         if (this.lowHealthPulse <= 0) return;
         const intensity = this.lowHealthPulse;
@@ -4331,6 +4455,9 @@ export class Game {
         this._drawDamageNumbers(ctx);
         this.camera.end(ctx);
 
+        // Day/night color overlay sits above the world but BELOW the HUD so
+        // HUD text stays unmuddied. The HUD has its own dark backings.
+        if (this.started) this._drawDayCycleOverlay(ctx);
         if (this.started) this._drawLowHealthVignette(ctx);
         if (this.started) this._drawHUD(ctx);
         if (this.started && this.levelUpFlash > 0) {
@@ -4508,7 +4635,14 @@ export class Game {
         for (const npc of (this.npcs || [])) {
             drawables.push({
                 sortY: npc.sortY,
-                draw: () => npc.draw(ctx),
+                draw: () => {
+                    // Torch halo first so it sits behind the NPC sprite on
+                    // the ground. drawTorchHalo is a no-op for non-torch NPCs.
+                    if (typeof npc.drawTorchHalo === 'function') {
+                        npc.drawTorchHalo(ctx, this._currentDayPalette().nightFactor);
+                    }
+                    npc.draw(ctx);
+                },
             });
         }
 
@@ -4555,8 +4689,9 @@ export class Game {
         for (const shard of (this.boneglassShards || [])) {
             drawables.push({ sortY: shard.y, draw: () => this._drawBoneglassShard(ctx, shard) });
         }
+        const nightFactor = this._currentDayPalette().nightFactor;
         for (const crystal of this.crystals) {
-            drawables.push({ sortY: crystal.sortY, draw: () => crystal.draw(ctx) });
+            drawables.push({ sortY: crystal.sortY, draw: () => crystal.draw(ctx, nightFactor) });
         }
 
         for (const portal of this.portals) {
@@ -4569,7 +4704,7 @@ export class Game {
         if (!this.ridingBoat) {
             drawables.push({
                 sortY: this.player.y + this.player.h,
-                draw: () => this.player.draw(ctx),
+                draw: () => this.player.draw(ctx, nightFactor),
             });
         }
 
@@ -6321,6 +6456,7 @@ export class Game {
             bossDefeated: { ...(this.bossDefeated || {}) },
             enemyKillCounts: this._normalizeEnemyKillCounts(this.enemyKillCounts),
             gameTime: this.gameTime,
+            dayCycleTime: this.dayCycleTime,
             settings: {
                 showHints: this.settings.showHints,
                 soundEnabled: this.settings.soundEnabled,

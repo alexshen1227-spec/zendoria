@@ -267,7 +267,7 @@ export class CrystalCluster {
         return { landed: true, destroyed: false };
     }
 
-    draw(ctx) {
+    draw(ctx, nightFactor = 0) {
         // Shadow
         ctx.fillStyle = `rgba(0, 0, 0, ${this.destroyed ? 0.2 : 0.32})`;
         ctx.beginPath();
@@ -284,11 +284,16 @@ export class CrystalCluster {
 
         const pulse = Math.sin(this.glowTimer * 3.2) * 0.5 + 0.5;
         const rgb = this._hexToRgb(this.colorA);
-        const grad = ctx.createRadialGradient(this.cx, this.cy, 1, this.cx, this.cy, 18);
-        grad.addColorStop(0, `rgba(${rgb}, ${0.18 + pulse * 0.14})`);
+        // Night boost: gradient grows up to ~50% brighter and ~50% wider so
+        // crystals read like beacons in the dark. Day stays subtle.
+        const glowAlpha = 0.18 + pulse * 0.14 + nightFactor * (0.16 + pulse * 0.08);
+        const glowRadius = 18 + nightFactor * 10;
+        const grad = ctx.createRadialGradient(this.cx, this.cy, 1, this.cx, this.cy, glowRadius);
+        grad.addColorStop(0, `rgba(${rgb}, ${glowAlpha.toFixed(3)})`);
         grad.addColorStop(1, `rgba(${rgb}, 0)`);
         ctx.fillStyle = grad;
-        ctx.fillRect(this.x - 8, this.y - 8, this.w + 16, this.h + 16);
+        const padBox = Math.round(8 + nightFactor * 6);
+        ctx.fillRect(this.x - padBox, this.y - padBox, this.w + padBox * 2, this.h + padBox * 2);
 
         const jx = this.flashTimer > 0 ? (Math.random() * 2 - 1) * 1.2 : 0;
         const jy = this.flashTimer > 0 ? (Math.random() * 2 - 1) * 0.8 : 0;

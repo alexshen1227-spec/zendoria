@@ -637,7 +637,7 @@ export class Player {
         }
     }
 
-    draw(ctx) {
+    draw(ctx, nightFactor = 0) {
         for (const echo of this.echoTrail) {
             this.playerSheet.drawFrame(ctx, echo.frame, 0, echo.x, echo.y, {
                 alpha: echo.alpha,
@@ -645,6 +645,27 @@ export class Player {
                 originX: this.w / 2,
                 originY: this.h / 2,
             });
+        }
+
+        // Shardfang inner glow at night: a small cyan radial halo behind the
+        // player so the sword reads as "catching the night air". Subtle by
+        // design -- never bright enough to outshine the sprite. Source:
+        // vibe-code session day/night cycle juicy-extras.
+        if (nightFactor > 0.05) {
+            const breathe = Math.sin((this.echoTimer + this.walkTimer) * 0.6) * 0.5 + 0.5;
+            const haloAlpha = (0.10 + breathe * 0.06) * nightFactor;
+            const cx = this.x + this.w / 2;
+            const cy = this.y + this.h / 2 + 2;
+            const radius = 14 + nightFactor * 4;
+            const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, radius);
+            grad.addColorStop(0, `rgba(140, 220, 255, ${haloAlpha.toFixed(3)})`);
+            grad.addColorStop(0.6, `rgba(120, 180, 255, ${(haloAlpha * 0.45).toFixed(3)})`);
+            grad.addColorStop(1, 'rgba(120, 180, 255, 0)');
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+            ctx.restore();
         }
 
         const bodyFrame = this._currentFrame();

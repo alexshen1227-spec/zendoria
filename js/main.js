@@ -1,5 +1,5 @@
 import { loadGameAssets } from './assets.js?v=20260427-round2';
-import { Game } from './game.js?v=20260427-respawn-grace';
+import { Game } from './game.js?v=20260427-day-night';
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('resetSave') === '1') {

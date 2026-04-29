@@ -171,6 +171,37 @@ export class AmbientNpc extends BaseNpcActor {
     get effect() { return this.definition.effect || null; }
     get portraitFrame() { return this.variant?.portrait || super.portraitFrame; }
 
+    // True if this NPC carries a light source in their variant flavor (lantern
+    // keeper, moon ferrier, star-herd, ember/burnt guides). At night these
+    // get a soft warm halo on the ground around them. Source: vibe-code
+    // session day/night cycle "NPC torches" feature.
+    _isTorchBearer() {
+        const v = this.definition.variant || '';
+        const id = this.definition.id || '';
+        return /lantern|moon|cinder|burnt|ember/i.test(v) || /lantern|moon|halden|kael|tamas/i.test(id);
+    }
+
+    drawTorchHalo(ctx, nightFactor = 0) {
+        if (nightFactor <= 0.05) return;
+        if (!this._isTorchBearer()) return;
+        // Halo is centered on the NPC's feet so it reads as light cast on
+        // the ground. Warm amber tone matches a torch / lantern.
+        const cx = this.x + this.w / 2;
+        const cy = this.y + this.h - 2;
+        const radius = 22 + nightFactor * 10;
+        const flicker = Math.sin(this.bob * 4.2) * 0.5 + 0.5;
+        const alpha = (0.18 + flicker * 0.10) * nightFactor;
+        const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, radius);
+        grad.addColorStop(0, `rgba(255, 196, 120, ${alpha.toFixed(3)})`);
+        grad.addColorStop(0.6, `rgba(255, 160, 80, ${(alpha * 0.45).toFixed(3)})`);
+        grad.addColorStop(1, 'rgba(255, 140, 60, 0)');
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+        ctx.restore();
+    }
+
     update(dt) {
         super.update(dt);
         if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - dt);
