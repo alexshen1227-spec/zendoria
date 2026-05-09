@@ -28,7 +28,7 @@ function resolveSequenceFrame(frames, progress) {
 export const ENEMY_CONFIGS = {
     blightworm: {
         kind: 'blightworm',
-        src: 'assets/enemies/wormp_blightworm.png',
+        src: 'assets/sprites/enemies/blightworm_sheet.png',
         frameW: 32,
         frameH: 24,
         hudLabel: 'BLIGHTWORM',
@@ -64,7 +64,7 @@ export const ENEMY_CONFIGS = {
     },
     sunscarab: {
         kind: 'sunscarab',
-        src: 'assets/enemies/wormp_sunscarab.png',
+        src: 'assets/sprites/enemies/sunscarab_strip.png',
         frameW: 48,
         frameH: 32,
         hudLabel: 'SUNSCARAB',
@@ -99,7 +99,7 @@ export const ENEMY_CONFIGS = {
     },
     duneWarden: {
         kind: 'duneWarden',
-        src: 'assets/enemies/wormp_dune_warden.png',
+        src: 'assets/sprites/enemies/dune_warden_strip.png',
         frameW: 40,
         frameH: 48,
         hudLabel: 'DUNE WARDEN',
@@ -134,7 +134,7 @@ export const ENEMY_CONFIGS = {
     },
     rusher: {
         kind: 'rusher',
-        src: 'assets/enemies/wormp_rusher.png',
+        src: 'assets/sprites/enemies/rusher_sheet.png',
         frameW: 28,
         frameH: 28,
         hudLabel: 'RUSHER',
@@ -172,7 +172,7 @@ export const ENEMY_CONFIGS = {
     },
     tacticalArcher: {
         kind: 'tacticalArcher',
-        src: 'assets/enemies/wormp_tactical_archer.png',
+        src: 'assets/sprites/enemies/archer_sheet.png',
         frameW: 22,
         frameH: 32,
         hudLabel: 'TACTICAL ARCHER',
@@ -217,7 +217,7 @@ export const ENEMY_CONFIGS = {
     },
     goliath: {
         kind: 'goliath',
-        src: 'assets/enemies/wormp_goliath.png',
+        src: 'assets/sprites/enemies/goliath_sheet.png',
         frameW: 64,
         frameH: 56,
         hudLabel: 'GOLIATH CHAKRAM BEETLE',
@@ -264,7 +264,7 @@ export const ENEMY_CONFIGS = {
     },
     sandworm: {
         kind: 'sandworm',
-        src: 'assets/enemies/wormp_sandworm.png',
+        src: 'assets/sprites/boss/sandworm_sheet.png',
         frameW: 182,
         frameH: 96,
         hudLabel: 'SAND WORM',
