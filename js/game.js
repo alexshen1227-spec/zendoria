@@ -4459,6 +4459,13 @@ export class Game {
         // HUD text stays unmuddied. The HUD has its own dark backings.
         if (this.started) this._drawDayCycleOverlay(ctx);
         if (this.started) this._drawLowHealthVignette(ctx);
+        // Off-screen waypoint arrow points toward the current quest focus
+        // when the focus is outside the camera viewport. Five of six humans
+        // in playtest 2026-04-28 reported "I didn't know where to go" --
+        // the existing OBJECTIVE panel and on-screen nameplate aren't enough
+        // when the target is beyond the screen edge. Drawn before HUD so HUD
+        // can sit on top if it ever overlaps.
+        if (this.started) this._drawOffscreenWaypointArrow(ctx);
         if (this.started) this._drawHUD(ctx);
         if (this.started && this.levelUpFlash > 0) {
             ctx.fillStyle = `rgba(255, 244, 184, ${this.levelUpFlash * 0.55})`;
@@ -5796,6 +5803,78 @@ export class Game {
         font.draw(ctx, label, boxX + 5, boxY + 2, { color: '#ffe78a' });
     }
 
+    _drawOffscreenWaypointArrow(ctx) {
+        // When the current quest focus is OUTSIDE the camera viewport, draw
+        // a small arrow at the screen edge that points toward it. As soon
+        // as the focus comes on-screen, the arrow disappears and the
+        // existing nameplate / quest beacon take over.
+        // Source: 2026-04-28 playtest, 5/6 humans confirmed early-game
+        // 'where do I go' as the top issue.
+        const focus = this._currentQuestFocus();
+        if (!focus) return;
+        // Suppress while menus / dialogs / death are up so it doesn't clash.
+        if (this.dialog || this.rewardPopup || this.worldMapOpen
+            || this.deathState || this.skillTreeOpen || this.paused) return;
+
+        const sx = focus.x - this.camera.x;
+        const sy = focus.y - this.camera.y;
+        const margin = 14;
+        const onScreen = sx >= margin && sx <= NATIVE_WIDTH - margin
+            && sy >= margin && sy <= NATIVE_HEIGHT - margin;
+        if (onScreen) return;
+
+        const cx = NATIVE_WIDTH / 2;
+        const cy = NATIVE_HEIGHT / 2;
+        const dx = sx - cx;
+        const dy = sy - cy;
+        const angle = Math.atan2(dy, dx);
+
+        // Project to the screen edge inset by `margin`. Use the smaller of
+        // horizontal vs vertical scale so the arrow lands on the nearer edge.
+        const halfW = NATIVE_WIDTH / 2 - margin;
+        const halfH = NATIVE_HEIGHT / 2 - margin;
+        const scale = Math.min(
+            halfW / Math.max(0.0001, Math.abs(dx)),
+            halfH / Math.max(0.0001, Math.abs(dy)),
+        );
+        const ax = Math.round(cx + dx * scale);
+        const ay = Math.round(cy + dy * scale);
+
+        const pulse = Math.sin(this.gameTime * 5.5) * 0.5 + 0.5;
+        const accent = '#ffe78a';
+
+        // Soft amber glow under the arrow so it reads against any biome
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const glow = ctx.createRadialGradient(ax, ay, 1, ax, ay, 14);
+        glow.addColorStop(0, `rgba(255, 220, 140, ${0.35 + pulse * 0.25})`);
+        glow.addColorStop(1, 'rgba(255, 200, 120, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(ax - 14, ay - 14, 28, 28);
+        ctx.restore();
+
+        // Triangle arrowhead pointing along `angle`. Drawn rotated so it
+        // always points at the focus regardless of side of screen.
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(angle);
+        ctx.fillStyle = `rgba(7, 11, 19, ${0.78 + pulse * 0.12})`;
+        ctx.beginPath();
+        ctx.moveTo(7, 0);
+        ctx.lineTo(-5, -5);
+        ctx.lineTo(-5, 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-4, -4);
+        ctx.lineTo(-4, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
     _drawPortalProximityBadge(ctx, portal) {
         const font = this.assets?.pixelFont;
         if (!font || !portal) return;
@@ -5945,18 +6024,41 @@ export class Game {
             this.activeLoreReadout
         );
         const bossActive = this.bossState === 'preparing' || this.bossState === 'fighting';
-        if (this.settings.showHints && this.gameTime < 10 && !enemyNearby && !interactPromptActive && !bossActive) {
-            const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
-            // Show the combat hint only after the player has actually been
-            // near an enemy. Pre-encounter, combat coaching is noise --
-            // the first hint should only teach movement.
-            const showCombatLine = this.hasSeenEnemy;
-            const bannerH = showCombatLine ? 18 : 10;
-            ctx.fillStyle = `rgba(7, 11, 19, ${0.78 * alpha})`;
-            ctx.fillRect(42, NATIVE_HEIGHT - (showCombatLine ? 24 : 16), 174, bannerH);
-            font.draw(ctx, 'MOVE WITH WASD OR ARROWS.', 48, NATIVE_HEIGHT - (showCombatLine ? 21 : 13), { color: '#eef6ff', alpha });
-            if (showCombatLine) {
-                font.draw(ctx, 'STEP IN, STRIKE, BACK OFF.', 48, NATIVE_HEIGHT - 12, { color: '#97b6cf', alpha });
+        // Banner visibility logic:
+        //   - First-time player who hasn't talked to Elara: PERSIST until they
+        //     do, with a clear directive ("FOLLOW THE ARROW · TALK TO ELARA").
+        //     Five of six humans in the 2026-04-28 playtest reported "I didn't
+        //     know where to go" -- the prior 10-second fade was too short.
+        //   - Once Elara is talked to: revert to the original short-fade
+        //     control hints so the HUD doesn't stay cluttered for the whole run.
+        const showPersistentDirective = !this.hasTalkedToElara;
+        const showShortHint = this.hasTalkedToElara && this.gameTime < 10;
+        if (this.settings.showHints && !enemyNearby && !interactPromptActive && !bossActive
+            && (showPersistentDirective || showShortHint)) {
+            if (showPersistentDirective) {
+                // Pulsing amber banner so the eye returns to it even if the
+                // player has been ignoring it.
+                const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5;
+                const alpha = 0.85 + pulse * 0.10;
+                ctx.fillStyle = `rgba(7, 11, 19, ${(0.78 + pulse * 0.10).toFixed(3)})`;
+                ctx.fillRect(38, NATIVE_HEIGHT - 26, 182, 20);
+                ctx.strokeStyle = `rgba(255, 222, 138, ${(0.45 + pulse * 0.35).toFixed(3)})`;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(38.5, NATIVE_HEIGHT - 25.5, 181, 19);
+                font.draw(ctx, 'OBJECTIVE: FIND ELARA', 44, NATIVE_HEIGHT - 22, { color: '#ffe78a', alpha });
+                font.draw(ctx, 'WASD OR ARROWS TO MOVE. FOLLOW THE ARROW.', 44, NATIVE_HEIGHT - 13, { color: '#dff6ff', alpha });
+            } else {
+                const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
+                // Show the combat hint only after the player has actually been
+                // near an enemy. Pre-encounter, combat coaching is noise.
+                const showCombatLine = this.hasSeenEnemy;
+                const bannerH = showCombatLine ? 18 : 10;
+                ctx.fillStyle = `rgba(7, 11, 19, ${0.78 * alpha})`;
+                ctx.fillRect(42, NATIVE_HEIGHT - (showCombatLine ? 24 : 16), 174, bannerH);
+                font.draw(ctx, 'MOVE WITH WASD OR ARROWS.', 48, NATIVE_HEIGHT - (showCombatLine ? 21 : 13), { color: '#eef6ff', alpha });
+                if (showCombatLine) {
+                    font.draw(ctx, 'STEP IN, STRIKE, BACK OFF.', 48, NATIVE_HEIGHT - 12, { color: '#97b6cf', alpha });
+                }
             }
         }
 

@@ -579,10 +579,19 @@ export class Player {
             // Per-tap impulse: a brushed keydown should produce a visible
             // displacement even if the key is released within a frame. The
             // velocity-only model leaks small inputs because they translate
-            // to ~1 px/frame at 60 fps. Adding ~5 px on each fresh keydown
-            // keeps held-key behavior (constant velocity) intact while making
-            // taps feel alive. Source: P1-4 from playtest meta-analysis.
-            const TAP_IMPULSE_PX = 5;
+            // to ~1 px/frame at 60 fps. Adding a small one-frame nudge on
+            // each fresh keydown keeps held-key behavior (constant velocity)
+            // intact while making taps feel alive.
+            //
+            // Reduced from 5 px to 2 px in 2026-04-28 round 4: Aishani
+            // reported "a little glichy when moving" -- a 5 px instant
+            // teleport at 60 fps was visible as a hop, especially on tap-
+            // heavy input or high-refresh displays. 2 px still rescues the
+            // tap response (an unboosted single-frame held key only moves
+            // ~1.2 px) but is below visible-jump threshold for pixel art.
+            // Source: P1-4 from playtest meta-analysis (Round 2), refined
+            // in Round 4 movement-glitch report.
+            const TAP_IMPULSE_PX = 2;
             let tapDx = 0;
             let tapDy = 0;
             if (input.wasPressed('ArrowLeft') || input.wasPressed('KeyA')) tapDx -= 1;
