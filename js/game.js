@@ -2,14 +2,14 @@ import { NATIVE_WIDTH, NATIVE_HEIGHT, SCALE, TILE } from './constants.js?v=20260
 import { Input } from './input.js?v=20260418-polish-pass2';
 import { Player } from './player.js?v=20260427-tap-impulse';
 import { Camera } from './camera.js?v=20260414-no-bridge-pass2';
-import { World } from './world.js?v=20260427-spawn-and-tovin';
-import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260418-polish-pass2';
+import { World } from './world.js?v=20260509-art-pass';
+import { createEnemy, normalizeEnemyKind } from './enemy.js?v=20260509-wormp-art';
 import { Elara, Boatman, AmbientNpc } from './npc.js?v=20260425-sidequests';
 import { Boat } from './boat.js?v=20260418-polish-pass2';
 import { Tombstone } from './tombstone.js?v=20260414-tombstone-anim';
 import { Portal } from './portal.js?v=20260414-desert-enemies';
 import { TreasureChest } from './treasureChest.js?v=20260415-level-up-chest';
-import { Pillar } from './pillar.js?v=20260416-pillars-boss';
+import { Pillar } from './pillar.js?v=20260509-pillar-art';
 import { LoreStone, BuffShrine, CrystalCluster } from './exploration.js?v=20260416-openworld';
 import { AetherFont } from './aetherFont.js?v=20260418-aether-font';
 import { Mnemoforge } from './mnemoforge.js?v=20260418-singularity';
@@ -1152,7 +1152,8 @@ export class Game {
 
         this.pillars = (this.world.pillarSpawns || []).map((def, index) => {
             const savedStage = Array.isArray(savedPillars) ? (savedPillars[index] || 0) : 0;
-            return new Pillar(def, this.assets.pillarSheet, savedStage);
+            const sheet = this.assets.pillarSheets?.[def.biome] || this.assets.pillarSheet;
+            return new Pillar(def, sheet, savedStage);
         });
 
         const savedLoreRead = savedRealmState?.loreRead;

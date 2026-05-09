@@ -1,6 +1,7 @@
-import { PixelFont } from './pixelText.js?v=20260414-no-bridge-pass2';
+﻿import { PixelFont } from './pixelText.js?v=20260414-no-bridge-pass2';
 import { loadImage, SpriteSheet } from './sprite.js?v=20260414-no-bridge-pass2';
-import { ENEMY_CONFIGS } from './enemy.js?v=20260416-frontier-rusher-archer-goliath';
+import { ENEMY_CONFIGS } from './enemy.js?v=20260509-wormp-art';
+import { ITEM_DEFINITIONS } from './itemData.js?v=20260509-art-pass';
 
 const ENVIRONMENT_PROP_FILES = {
     pineTall: 'assets/sprites/environment/foliage_prop_00.png',
@@ -33,6 +34,15 @@ const ENVIRONMENT_PROP_FILES = {
     tropicsRuins: 'assets/sprites/biomes/tropics_ruins.png',
     tropicsRuinWall: 'assets/sprites/biomes/tropics_ruin_wall.png',
     tropicsPalmGlow: 'assets/sprites/biomes/tropics_palm_glow.png',
+};
+
+const PILLAR_SHEET_FILES = {
+    desert: 'assets/landmarks/pillar_amberwake.png',
+    canyon: 'assets/landmarks/pillar_rustrock.png',
+    salt: 'assets/landmarks/pillar_saltflat.png',
+    tropics: 'assets/landmarks/pillar_sunkentropic.png',
+    burnt: 'assets/landmarks/pillar_burntplain.png',
+    steppe: 'assets/landmarks/pillar_duststeppe.png',
 };
 
 const NPC_VARIANT_CONFIGS = {
@@ -604,7 +614,7 @@ function prepareGeneratedNpcSprite(image) {
     // Source PNGs already have transparent backgrounds (alpha=0 corners).
     // Running the dark-matte flood here would fill inward through the
     // transparent border and erase any opaque pixel where R/G/B are all
-    // below the threshold — i.e. the figure's hair, shadows, dark clothing,
+    // below the threshold â€” i.e. the figure's hair, shadows, dark clothing,
     // and outline edges. That destroyed 28-80% of every NPC's pixels.
     // Just trim to visible bounds and let fitSpriteToBox do the rest.
     const cleaned = trimTransparentBounds(image, 1);
@@ -677,6 +687,8 @@ function trimTransparentBounds(image, padding = 0) {
 export async function loadGameAssets() {
     const environmentEntries = Object.entries(ENVIRONMENT_PROP_FILES);
     const enemyEntries = Object.entries(ENEMY_CONFIGS);
+    const itemEntries = Object.entries(ITEM_DEFINITIONS);
+    const pillarEntries = Object.entries(PILLAR_SHEET_FILES);
     const generatedNpcEntries = Object.entries(GENERATED_NPC_FILES);
     const [
         playerImage,
@@ -709,8 +721,6 @@ export async function loadGameAssets() {
         deathQuitRaw,
         deathReloadRaw,
         worldMapImage,
-        pillarSheetImage,
-        sandwormSheetImage,
         ...runtimeImages
     ] = await Promise.all([
         loadImage('assets/sprites/player/driftwalker_walk_strip.png'),
@@ -743,9 +753,9 @@ export async function loadGameAssets() {
         loadImage('assets/reference/provided_pixel_art/You_Died%20(Quit).png'),
         loadImage('assets/reference/provided_pixel_art/You_Died%20(Reload).png'),
         loadImage('assets/reference/provided_pixel_art/Map.jpg'),
-        loadImage('assets/sprites/pillars/pillar_sheet.png'),
-        loadImage('assets/sprites/boss/sandworm_sheet.png'),
         ...enemyEntries.map(([, config]) => loadImage(config.src)),
+        ...pillarEntries.map(([, src]) => loadImage(src)),
+        ...itemEntries.map(([, config]) => loadImage(config.icon)),
         ...generatedNpcEntries.map(([id, src]) => loadImage(src).catch((error) => {
             console.warn(`Zendoria: optional generated NPC art failed for ${id}`, error);
             return null;
@@ -754,13 +764,28 @@ export async function loadGameAssets() {
     ]);
 
     const enemyImages = runtimeImages.slice(0, enemyEntries.length);
-    const generatedNpcImages = runtimeImages.slice(enemyEntries.length, enemyEntries.length + generatedNpcEntries.length);
-    const environmentImages = runtimeImages.slice(enemyEntries.length + generatedNpcEntries.length);
+    const pillarImagesStart = enemyEntries.length;
+    const itemImagesStart = pillarImagesStart + pillarEntries.length;
+    const generatedNpcImagesStart = itemImagesStart + itemEntries.length;
+    const environmentImagesStart = generatedNpcImagesStart + generatedNpcEntries.length;
+    const pillarImages = runtimeImages.slice(pillarImagesStart, itemImagesStart);
+    const itemImages = runtimeImages.slice(itemImagesStart, generatedNpcImagesStart);
+    const generatedNpcImages = runtimeImages.slice(generatedNpcImagesStart, environmentImagesStart);
+    const environmentImages = runtimeImages.slice(environmentImagesStart);
     const enemySheets = Object.fromEntries(
         enemyEntries.map(([kind, config], index) => [
             kind,
             new SpriteSheet(enemyImages[index], config.frameW, config.frameH),
         ]),
+    );
+    const pillarSheets = Object.fromEntries(
+        pillarEntries.map(([key], index) => [
+            key,
+            new SpriteSheet(pillarImages[index], 47, 48),
+        ]),
+    );
+    const itemIcons = Object.fromEntries(
+        itemEntries.map(([id], index) => [id, itemImages[index]]),
     );
     const npcGeneratedVariants = Object.fromEntries(
         generatedNpcEntries.map(([id], index) => [id, prepareGeneratedNpcSprite(generatedNpcImages[index])]),
@@ -833,8 +858,11 @@ export async function loadGameAssets() {
         deathQuitImage: deathQuitRaw,
         deathReloadImage: deathReloadRaw,
         worldMapImage,
-        pillarSheet: new SpriteSheet(pillarSheetImage, 47, 48),
-        sandwormSheet: new SpriteSheet(sandwormSheetImage, 182, 96),
+        pillarSheet: pillarSheets.desert,
+        pillarSheets,
+        itemDefinitions: ITEM_DEFINITIONS,
+        itemIcons,
+        sandwormSheet: enemySheets.sandworm,
         titleVoiceSrc: 'assets/audio/voice/title-intro-cornelius.mp3',
         gameMusicSrc: 'assets/audio/music/driftmere-battle-loop.mp3',
         titleMusicSrc: 'assets/audio/music/View_from_the_World_Map.mp3',
