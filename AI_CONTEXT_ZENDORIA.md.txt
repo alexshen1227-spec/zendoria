@@ -5,8 +5,6 @@ Welcome to the project. You will be working with other AI, or you might be the f
 
 ## You may change, add, delete, or update the follow texts.
 
-> **TODO for Codex / ChatGPT:** Remove / clean the background on the saving tomb source picture. It is *an animation strip, not a single frame*, and lives inside `assets/` (see `assets/reference/provided_pixel_art/Stone_pillar_tomb_design.png`). When producing the runtime asset please split the animation frames and strip the background (it will likely need alpha cleanup beyond the runtime `removeEdgeMatte` flood-fill). Drop the cleaned frames into `assets/sprites/environment/` (e.g. `tombstone_idle_strip.png`) so the game can use a `SpriteSheet` instead of the single still currently loaded at runtime.
-
 > **TODO for Codex / ChatGPT:** The new desert realm currently uses the temporary objective text `Explore Desert`. This is still only a placeholder exploration prompt and needs a future story / quest / objective pass in `AI_CONTEXT_ZENDORIA.md.txt` + game logic once the Index zone gets real content.
 
 
@@ -117,9 +115,13 @@ While the game should eventually become massive, **we are currently ONLY focusin
 * Cleaned runtime-ready assets generated from those references:
   * `assets/sprites/player/driftwalker_walk_strip.png`
   * `assets/sprites/player/driftwalker_idle.png`
-  * `assets/sprites/enemies/blightworm_sheet.png`
-  * `assets/sprites/enemies/sunscarab_strip.png`
-  * `assets/sprites/enemies/dune_warden_strip.png`
+  * `assets/enemies/wormp_blightworm.png`
+  * `assets/enemies/wormp_sunscarab.png`
+  * `assets/enemies/wormp_dune_warden.png`
+  * `assets/enemies/wormp_rusher.png`
+  * `assets/enemies/wormp_tactical_archer.png`
+  * `assets/enemies/wormp_goliath.png`
+  * `assets/enemies/wormp_sandworm.png`
   * `assets/sprites/weapons/shardfang_icon.png`
   * `assets/sprites/weapons/shardfang_slash_strip.png`
   * `assets/ui/title-screen.png`
@@ -142,6 +144,78 @@ While the game should eventually become massive, **we are currently ONLY focusin
   * `assets/audio/voice/title-intro-cornelius.mp3`
   * `assets/audio/music/driftmere-battle-loop.mp3`
   * `assets/sprites/environment/index_portal.png`
+
+### Completed (2026-05-09, art pass for frontier content)
+* Added native transparent pixel-art assets in the requested project folders:
+  * `assets/items/` for inventory-ready icons.
+  * `assets/enemies/` for Wormp enemy sprite sheets.
+  * `assets/landmarks/` for six biome-specific Pillar strips.
+  * `assets/banners/` for Banner Three world props.
+* `js/enemy.js` now points enemy configs at the new `assets/enemies/wormp_*.png` sheets.
+* `js/assets.js` now preloads `ITEM_DEFINITIONS`, item icons, biome-specific `pillarSheets`, and Banner Three props.
+* `js/world.js` now spawns six frontier Pillars instead of the prior three generic Pillars: Amberwake, Rust-Rock, Salt Flats, Sunken Tropics, Burnt Plains, and Duststeppe.
+* Banner Three props are placed near the Last Watchtower area as world objects.
+
+## Asset Registry
+
+**Inventory item icons (`assets/items/`, 32x32 transparent PNGs):**
+* `aether_font_vial.png` - bottled tide-aether consumable; ties to the Aether Font surge.
+* `banner_mark_ash.png` - ash pennant mark; ties to Banner Three.
+* `banner_mark_star.png` - star pennant mark; ties to Banner Three.
+* `banner_mark_tide.png` - tide pennant mark; ties to Banner Three.
+* `cinder_ash.png` - ember ash consumable; ties to the Burnt Plains ash-road.
+* `driftstep_boots.png` - boots equipment icon; ties to Driftstep and Wayfinder step rewards.
+* `elaras_map.png` - folded route map equipment icon; ties to Elara's map unlock.
+* `herbal_draught.png` - green healing draught; ties to Ila and Mira healing rewards.
+* `lantern_ward_charm.png` - ward charm equipment icon; ties to Drift Lantern ward magic.
+* `master_relic_memory.png` - purple memory relic; ties to the Sunken Relic and Mnemoforge.
+* `master_relic_might.png` - crown-like might relic; ties to the Four Masters relic set.
+* `master_relic_swift.png` - teal speed relic orb; ties to the Four Masters relic set.
+* `master_relic_ward.png` - salt-white ward tablet; ties to the Four Masters relic set.
+* `mnemoforge_compass.png` - compass equipment icon; ties to the Mnemoforge respec altar.
+* `pillar_shard_amber.png` - Amberwake Pillar-shard; ties to the Amberwake Desert Pillar.
+* `pillar_shard_cinder.png` - cinder Pillar-shard; ties to the Burnt Plains Pillar.
+* `pillar_shard_dust.png` - dust Pillar-shard; ties to the Duststeppe Wilds Pillar.
+* `pillar_shard_rust.png` - rust Pillar-shard; ties to the Rust-Rock Canyon Pillar.
+* `pillar_shard_salt.png` - salt Pillar-shard; ties to the Shimmering Salt Flats Pillar.
+* `pillar_shard_tide.png` - tide Pillar-shard; ties to the Sunken Tropics Pillar.
+* `rowboat_oar_token.png` - oar token equipment icon; ties to the Boatman and rowboat unlock.
+* `salt_glass_vial.png` - broken salt glass consumable; ties to Qira Salt Glasswright.
+* `shardfang_dagger.png` - dagger equipment icon; ties to the Shardwing talon starter weapon.
+* `shardwing_eye.png` - amber eye remnant; ties to Shardwing Wyvern remains.
+* `shardwing_pinion.png` - teal pinion remnant; ties to Shardwing Wyvern remains.
+* `shardwing_scale.png` - scale cluster remnant; ties to Shardwing Wyvern remains.
+* `shardwing_talon.png` - talon remnant; ties to Shardwing Wyvern remains.
+* `tide_thread.png` - stitched tide-thread consumable; ties to Tide Medic wound magic.
+* `wormp_trophy_blightworm.png` - Blightworm trophy; ties to Blightworm Wormps.
+* `wormp_trophy_dune_warden.png` - Dune Warden mask trophy; ties to Dune Warden Wormps.
+* `wormp_trophy_goliath.png` - Goliath plate trophy; ties to Goliath Chakram Wormps.
+* `wormp_trophy_rusher.png` - Rusher claw trophy; ties to Canyon Rusher Wormps.
+* `wormp_trophy_sunscarab.png` - shell trophy; ties to Sunscarab Wormps.
+* `wormp_trophy_tactical_archer.png` - bow/mouth trophy; ties to Salt Picket/Tactical Archer Wormps.
+* `wormp_trophy_world_coil.png` - coiled trophy; ties to the Sand Worm / World-Coil Wormp.
+
+**Wormp enemy sprites (`assets/enemies/`, transparent sprite sheets):**
+* `wormp_blightworm.png` - 32x24 frame Blightworm sheet; used by enemy kind `blightworm`.
+* `wormp_sunscarab.png` - 48x32 frame Sunscarab strip; used by enemy kind `sunscarab`.
+* `wormp_dune_warden.png` - 40x48 frame Dune Warden strip; used by enemy kind `duneWarden`.
+* `wormp_rusher.png` - 28x28 frame Rusher sheet; used by enemy kind `rusher`.
+* `wormp_tactical_archer.png` - 22x32 frame Archer sheet; used by enemy kind `tacticalArcher`.
+* `wormp_goliath.png` - 64x56 frame Goliath sheet; used by enemy kind `goliath`.
+* `wormp_sandworm.png` - 182x96 frame Sand Worm boss sheet; used by enemy kind `sandworm`.
+
+**Pillars (`assets/landmarks/`, 47x48 frames, three-stage strips):**
+* `pillar_amberwake.png` - intact/cracked/rubble Amberwake Pillar; used by biome key `desert`.
+* `pillar_rustrock.png` - intact/cracked/rubble Rust-Rock Pillar; used by biome key `canyon`.
+* `pillar_saltflat.png` - intact/cracked/rubble Salt Flats Pillar; used by biome key `salt`.
+* `pillar_sunkentropic.png` - intact/cracked/rubble Sunken Tropics Pillar; used by biome key `tropics`.
+* `pillar_burntplain.png` - intact/cracked/rubble Burnt Plains Pillar; used by biome key `burnt`.
+* `pillar_duststeppe.png` - intact/cracked/rubble Duststeppe Pillar; used by biome key `steppe`.
+
+**Banner Three (`assets/banners/`, 48x64 transparent PNGs):**
+* `banner_three_ash.png` - larger ash banner world prop; ties to the Last Watchtower Banner Three lore.
+* `banner_three_tide.png` - larger tide banner world prop; ties to the Last Watchtower Banner Three lore.
+* `banner_three_star.png` - larger star banner world prop; ties to the Last Watchtower Banner Three lore.
 * The environment tile references are now safely inside the project for future AI use, but the island terrain is still mostly drawn procedurally in `js/world.js` rather than using literal tile extraction.
 
 **Starting Island Design: Driftmere Isle**
