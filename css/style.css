@@ -37,7 +37,9 @@ body::before {
 
 #game-container {
     position: relative;
-    padding: 6px;
+    /* Slim padding -- the canvas now fills the viewport via JS sizing,
+       so the container just needs to host the canvas + DOM overlays. */
+    padding: 0;
     border-radius: 6px;
     background:
         radial-gradient(circle at top left, rgba(120, 247, 215, 0.1), transparent 60%),
@@ -49,6 +51,10 @@ body::before {
     line-height: 0;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    /* box-sizing: border-box keeps the JS-computed style.width/height the
+       full visible footprint -- the 2px border now sits inside, not added
+       to size. Stops scrollbars at the edge of viewport. */
+    box-sizing: border-box;
     border: 2px solid #2a4b66;
     border-radius: 2px;
     box-shadow:

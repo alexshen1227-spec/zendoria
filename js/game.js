@@ -110,10 +110,16 @@ export class Game {
         this.ctx = canvas.getContext('2d');
         this.assets = assets;
 
+        // Internal resolution stays at NATIVE_WIDTH x NATIVE_HEIGHT so all
+        // pixel-art math is unchanged. The CSS size is computed to fill the
+        // viewport while preserving the 256x224 aspect ratio. Browsers
+        // handle the upscale via image-rendering: pixelated, keeping pixels
+        // crisp even at non-integer scales.
+        this.canvas = canvas;
         canvas.width = NATIVE_WIDTH;
         canvas.height = NATIVE_HEIGHT;
-        canvas.style.width = `${NATIVE_WIDTH * SCALE}px`;
-        canvas.style.height = `${NATIVE_HEIGHT * SCALE}px`;
+        this._resizeCanvasToViewport();
+        window.addEventListener('resize', () => this._resizeCanvasToViewport());
 
         this.ctx.imageSmoothingEnabled = false;
 
@@ -306,6 +312,23 @@ export class Game {
         this._attemptTitleVoiceAutoplay();
         this._setupAdminPanel();
         requestAnimationFrame((time) => this._loop(time));
+    }
+
+    _resizeCanvasToViewport() {
+        // Compute the largest size that fits the viewport while preserving
+        // 256:224 aspect. Float scale + image-rendering: pixelated keeps the
+        // pixel-art crisp without forcing integer scaling that wastes
+        // screen real-estate. A small margin leaves breathing room for the
+        // canvas border + shadow.
+        if (!this.canvas) return;
+        const margin = 12;
+        const availW = Math.max(NATIVE_WIDTH, window.innerWidth - margin * 2);
+        const availH = Math.max(NATIVE_HEIGHT, window.innerHeight - margin * 2);
+        const scale = Math.min(availW / NATIVE_WIDTH, availH / NATIVE_HEIGHT);
+        const targetW = Math.floor(NATIVE_WIDTH * scale);
+        const targetH = Math.floor(NATIVE_HEIGHT * scale);
+        this.canvas.style.width = `${targetW}px`;
+        this.canvas.style.height = `${targetH}px`;
     }
 
     _setupAdminPanel() {
@@ -5803,13 +5826,31 @@ export class Game {
         font.draw(ctx, label, boxX + 5, boxY + 2, { color: '#ffe78a' });
     }
 
+    _waypointLabel() {
+        // Label that goes next to the off-screen arrow so the player knows
+        // *what* it's pointing at, not just a direction. Synced with the
+        // current quest focus.
+        if (!this.hasTalkedToElara) return 'ELARA';
+        if (this.bossDefeated?.sandworm && !this.hasBoat) {
+            return this.currentRealmId === 'driftmere' ? 'BOATMAN' : 'DRIFTMERE';
+        }
+        if (this.currentRealmId !== 'frontier') return 'GATE';
+        if (!this.hasReachedCanyons) return 'CANYONS';
+        if (!this.hasReachedSaltFlats) return 'SALT FLATS';
+        if (!this.hasReachedTropics) return 'TROPICS';
+        if (!this.hasLevelUpAbility) return 'RELIC';
+        const sideQuestNpc = this._getTrackedSideQuestNpc();
+        if (sideQuestNpc) return (sideQuestNpc.name || 'QUEST').toUpperCase();
+        return '';
+    }
+
     _drawOffscreenWaypointArrow(ctx) {
         // When the current quest focus is OUTSIDE the camera viewport, draw
-        // a small arrow at the screen edge that points toward it. As soon
-        // as the focus comes on-screen, the arrow disappears and the
-        // existing nameplate / quest beacon take over.
-        // Source: 2026-04-28 playtest, 5/6 humans confirmed early-game
-        // 'where do I go' as the top issue.
+        // a clear waypoint marker at the screen edge that points toward it.
+        // Reads as "THE arrow" -- a deliberate UI chevron with a label,
+        // soft glow, and steady pulse -- not a glitch.
+        // Source: 2026-04-28 playtest, 5/6 humans confirmed 'where do I go'
+        // as the top issue. Quality refined in same-day follow-up.
         const focus = this._currentQuestFocus();
         if (!focus) return;
         // Suppress while menus / dialogs / death are up so it doesn't clash.
@@ -5818,7 +5859,7 @@ export class Game {
 
         const sx = focus.x - this.camera.x;
         const sy = focus.y - this.camera.y;
-        const margin = 14;
+        const margin = 18;
         const onScreen = sx >= margin && sx <= NATIVE_WIDTH - margin
             && sy >= margin && sy <= NATIVE_HEIGHT - margin;
         if (onScreen) return;
@@ -5840,39 +5881,93 @@ export class Game {
         const ax = Math.round(cx + dx * scale);
         const ay = Math.round(cy + dy * scale);
 
-        const pulse = Math.sin(this.gameTime * 5.5) * 0.5 + 0.5;
-        const accent = '#ffe78a';
+        const pulse = Math.sin(this.gameTime * 4.4) * 0.5 + 0.5;
+        // Subtle bob along the pointing axis so the arrow feels alive.
+        const bob = Math.sin(this.gameTime * 3.6) * 1.2;
+        const bobX = Math.cos(angle) * bob;
+        const bobY = Math.sin(angle) * bob;
 
-        // Soft amber glow under the arrow so it reads against any biome
+        const accent = '#ffe78a';
+        const accentDeep = '#ffb84a';
+
+        // Soft amber glow under the arrow so it reads against any biome.
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        const glow = ctx.createRadialGradient(ax, ay, 1, ax, ay, 14);
-        glow.addColorStop(0, `rgba(255, 220, 140, ${0.35 + pulse * 0.25})`);
-        glow.addColorStop(1, 'rgba(255, 200, 120, 0)');
+        const glow = ctx.createRadialGradient(ax + bobX, ay + bobY, 1, ax + bobX, ay + bobY, 18);
+        glow.addColorStop(0, `rgba(255, 220, 140, ${(0.40 + pulse * 0.30).toFixed(3)})`);
+        glow.addColorStop(0.55, `rgba(255, 180, 90, ${(0.18 + pulse * 0.12).toFixed(3)})`);
+        glow.addColorStop(1, 'rgba(255, 180, 90, 0)');
         ctx.fillStyle = glow;
-        ctx.fillRect(ax - 14, ay - 14, 28, 28);
+        ctx.fillRect(ax - 18, ay - 18, 36, 36);
         ctx.restore();
 
-        // Triangle arrowhead pointing along `angle`. Drawn rotated so it
-        // always points at the focus regardless of side of screen.
+        // Pixel-art chevron: dark outline backing + bright fill + highlight.
+        // Built as a stem + arrowhead so it reads clearly as a directional
+        // pointer, not just a triangle.
         ctx.save();
-        ctx.translate(ax, ay);
+        ctx.translate(ax + bobX, ay + bobY);
         ctx.rotate(angle);
-        ctx.fillStyle = `rgba(7, 11, 19, ${0.78 + pulse * 0.12})`;
+
+        // Outline / shadow shape (slightly larger, darker)
+        ctx.fillStyle = `rgba(7, 11, 19, ${(0.85 + pulse * 0.10).toFixed(3)})`;
         ctx.beginPath();
-        ctx.moveTo(7, 0);
-        ctx.lineTo(-5, -5);
-        ctx.lineTo(-5, 5);
+        ctx.moveTo(9, 0);            // tip
+        ctx.lineTo(2, -6);
+        ctx.lineTo(2, -3);
+        ctx.lineTo(-7, -3);           // stem upper
+        ctx.lineTo(-7, 3);            // stem lower
+        ctx.lineTo(2, 3);
+        ctx.lineTo(2, 6);
         ctx.closePath();
         ctx.fill();
+
+        // Bright body
         ctx.fillStyle = accent;
         ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(-4, -4);
-        ctx.lineTo(-4, 4);
+        ctx.moveTo(8, 0);
+        ctx.lineTo(2, -5);
+        ctx.lineTo(2, -2);
+        ctx.lineTo(-6, -2);
+        ctx.lineTo(-6, 2);
+        ctx.lineTo(2, 2);
+        ctx.lineTo(2, 5);
         ctx.closePath();
         ctx.fill();
+
+        // Inner highlight along the spine for crisper pixel-art feel
+        ctx.fillStyle = '#fff6d3';
+        ctx.fillRect(-5, -1, 6, 1);
+        ctx.fillStyle = accentDeep;
+        ctx.fillRect(-5, 1, 6, 1);
+
         ctx.restore();
+
+        // Target label next to the arrow so the player knows what it
+        // points at. Positioned on the screen-center side of the arrow
+        // (so it doesn't fall off-screen) with a small backplate.
+        const label = this._waypointLabel();
+        if (label) {
+            const font = this.assets?.pixelFont;
+            if (font) {
+                const labelW = font.measure(label, 1);
+                const boxW = labelW + 6;
+                const boxH = 9;
+                // Offset opposite to the pointing direction so the label
+                // sits between the arrow and screen-center.
+                const labelOffset = 12;
+                const lx = Math.round(ax - Math.cos(angle) * labelOffset - boxW / 2);
+                const ly = Math.round(ay - Math.sin(angle) * labelOffset - boxH / 2);
+                // Clamp inside the screen edges so we never spill off.
+                const clampedX = Math.max(2, Math.min(NATIVE_WIDTH - boxW - 2, lx));
+                const clampedY = Math.max(2, Math.min(NATIVE_HEIGHT - boxH - 2, ly));
+                ctx.fillStyle = `rgba(7, 11, 19, ${(0.78 + pulse * 0.12).toFixed(3)})`;
+                ctx.fillRect(clampedX, clampedY, boxW, boxH);
+                ctx.strokeStyle = `rgba(255, 222, 138, ${(0.45 + pulse * 0.30).toFixed(3)})`;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(clampedX + 0.5, clampedY + 0.5, boxW - 1, boxH - 1);
+                font.draw(ctx, label, clampedX + 3, clampedY + 2, { color: accent });
+            }
+        }
     }
 
     _drawPortalProximityBadge(ctx, portal) {
@@ -6043,7 +6138,8 @@ export class Game {
             && (showPersistentDirective || showShortHint)) {
             if (showPersistentDirective) {
                 // Pulsing amber banner so the eye returns to it even if the
-                // player has been ignoring it.
+                // player has been ignoring it. Box is sized to fit the
+                // longest line at 1x scale -- pixel font is 6 px/char.
                 const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5;
                 const alpha = 0.85 + pulse * 0.10;
                 const headlineByPhase = {
@@ -6051,16 +6147,27 @@ export class Game {
                     'enter-portal': 'OBJECTIVE: ENTER AMBERWAKE GATE',
                 };
                 const subByPhase = {
-                    'find-elara':  'WASD OR ARROWS TO MOVE. FOLLOW THE ARROW.',
-                    'enter-portal': 'FOLLOW THE ARROW. PRESS E AT THE GATE.',
+                    'find-elara':  'MOVE WITH WASD. FOLLOW THE ARROW.',
+                    'enter-portal': 'FOLLOW ARROW. PRESS E TO ENTER.',
                 };
+                const head = headlineByPhase[directivePhase];
+                const sub = subByPhase[directivePhase];
+                const headW = font.measure(head, 1);
+                const subW = font.measure(sub, 1);
+                const innerW = Math.max(headW, subW);
+                const boxW = Math.min(NATIVE_WIDTH - 24, innerW + 12);
+                const boxX = Math.round((NATIVE_WIDTH - boxW) / 2);
+                const boxY = NATIVE_HEIGHT - 26;
                 ctx.fillStyle = `rgba(7, 11, 19, ${(0.78 + pulse * 0.10).toFixed(3)})`;
-                ctx.fillRect(38, NATIVE_HEIGHT - 26, 182, 20);
+                ctx.fillRect(boxX, boxY, boxW, 20);
                 ctx.strokeStyle = `rgba(255, 222, 138, ${(0.45 + pulse * 0.35).toFixed(3)})`;
                 ctx.lineWidth = 1;
-                ctx.strokeRect(38.5, NATIVE_HEIGHT - 25.5, 181, 19);
-                font.draw(ctx, headlineByPhase[directivePhase], 44, NATIVE_HEIGHT - 22, { color: '#ffe78a', alpha });
-                font.draw(ctx, subByPhase[directivePhase], 44, NATIVE_HEIGHT - 13, { color: '#dff6ff', alpha });
+                ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, 19);
+                // Center each line individually within the box.
+                const headX = boxX + Math.round((boxW - headW) / 2);
+                const subX = boxX + Math.round((boxW - subW) / 2);
+                font.draw(ctx, head, headX, NATIVE_HEIGHT - 22, { color: '#ffe78a', alpha });
+                font.draw(ctx, sub, subX, NATIVE_HEIGHT - 13, { color: '#dff6ff', alpha });
             } else {
                 const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
                 // Show the combat hint only after the player has actually been
