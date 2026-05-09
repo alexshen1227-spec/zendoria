@@ -6024,15 +6024,21 @@ export class Game {
             this.activeLoreReadout
         );
         const bossActive = this.bossState === 'preparing' || this.bossState === 'fighting';
-        // Banner visibility logic:
-        //   - First-time player who hasn't talked to Elara: PERSIST until they
-        //     do, with a clear directive ("FOLLOW THE ARROW · TALK TO ELARA").
-        //     Five of six humans in the 2026-04-28 playtest reported "I didn't
-        //     know where to go" -- the prior 10-second fade was too short.
-        //   - Once Elara is talked to: revert to the original short-fade
-        //     control hints so the HUD doesn't stay cluttered for the whole run.
-        const showPersistentDirective = !this.hasTalkedToElara;
-        const showShortHint = this.hasTalkedToElara && this.gameTime < 10;
+        // Banner visibility logic, updated 2026-04-28 round 4 follow-up:
+        //   - Pre-Elara: directive banner says FIND ELARA. Persists.
+        //   - Post-Elara, still in driftmere: directive banner switches to
+        //     ENTER THE AMBERWAKE GATE. Persists. (Mom's playtest got stuck
+        //     at the portal trying to figure out how to use it; the arrow
+        //     + banner together close that gap.)
+        //   - Once the player crosses the portal (currentRealmId='frontier'):
+        //     fall back to the short-fade movement/combat hints so the HUD
+        //     stops shouting once the player is clearly oriented.
+        const inDriftmerePreFrontier = this.currentRealmId !== 'frontier';
+        const directivePhase = !this.hasTalkedToElara
+            ? 'find-elara'
+            : (inDriftmerePreFrontier ? 'enter-portal' : null);
+        const showPersistentDirective = directivePhase !== null;
+        const showShortHint = !showPersistentDirective && this.gameTime < 10;
         if (this.settings.showHints && !enemyNearby && !interactPromptActive && !bossActive
             && (showPersistentDirective || showShortHint)) {
             if (showPersistentDirective) {
@@ -6040,13 +6046,21 @@ export class Game {
                 // player has been ignoring it.
                 const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5;
                 const alpha = 0.85 + pulse * 0.10;
+                const headlineByPhase = {
+                    'find-elara':  'OBJECTIVE: FIND ELARA',
+                    'enter-portal': 'OBJECTIVE: ENTER AMBERWAKE GATE',
+                };
+                const subByPhase = {
+                    'find-elara':  'WASD OR ARROWS TO MOVE. FOLLOW THE ARROW.',
+                    'enter-portal': 'FOLLOW THE ARROW. PRESS E AT THE GATE.',
+                };
                 ctx.fillStyle = `rgba(7, 11, 19, ${(0.78 + pulse * 0.10).toFixed(3)})`;
                 ctx.fillRect(38, NATIVE_HEIGHT - 26, 182, 20);
                 ctx.strokeStyle = `rgba(255, 222, 138, ${(0.45 + pulse * 0.35).toFixed(3)})`;
                 ctx.lineWidth = 1;
                 ctx.strokeRect(38.5, NATIVE_HEIGHT - 25.5, 181, 19);
-                font.draw(ctx, 'OBJECTIVE: FIND ELARA', 44, NATIVE_HEIGHT - 22, { color: '#ffe78a', alpha });
-                font.draw(ctx, 'WASD OR ARROWS TO MOVE. FOLLOW THE ARROW.', 44, NATIVE_HEIGHT - 13, { color: '#dff6ff', alpha });
+                font.draw(ctx, headlineByPhase[directivePhase], 44, NATIVE_HEIGHT - 22, { color: '#ffe78a', alpha });
+                font.draw(ctx, subByPhase[directivePhase], 44, NATIVE_HEIGHT - 13, { color: '#dff6ff', alpha });
             } else {
                 const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
                 // Show the combat hint only after the player has actually been
