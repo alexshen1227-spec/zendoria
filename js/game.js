@@ -315,15 +315,14 @@ export class Game {
     }
 
     _resizeCanvasToViewport() {
-        // Compute the largest size that fits the viewport while preserving
-        // 256:224 aspect. Float scale + image-rendering: pixelated keeps the
-        // pixel-art crisp without forcing integer scaling that wastes
-        // screen real-estate. A small margin leaves breathing room for the
-        // canvas border + shadow.
+        // Fill the full viewport while preserving the 256:224 aspect ratio.
+        // No margins -- the canvas extends edge-to-edge and the body's
+        // cosmic gradient handles the letterbox on whichever axis is the
+        // limiting one. image-rendering: pixelated handles the upscale,
+        // keeping pixels crisp at any non-integer scale.
         if (!this.canvas) return;
-        const margin = 12;
-        const availW = Math.max(NATIVE_WIDTH, window.innerWidth - margin * 2);
-        const availH = Math.max(NATIVE_HEIGHT, window.innerHeight - margin * 2);
+        const availW = Math.max(NATIVE_WIDTH, window.innerWidth);
+        const availH = Math.max(NATIVE_HEIGHT, window.innerHeight);
         const scale = Math.min(availW / NATIVE_WIDTH, availH / NATIVE_HEIGHT);
         const targetW = Math.floor(NATIVE_WIDTH * scale);
         const targetH = Math.floor(NATIVE_HEIGHT * scale);
@@ -5943,8 +5942,11 @@ export class Game {
         ctx.restore();
 
         // Target label next to the arrow so the player knows what it
-        // points at. Positioned on the screen-center side of the arrow
-        // (so it doesn't fall off-screen) with a small backplate.
+        // points at. Position it perpendicular to the pointing direction,
+        // biased toward screen center, so it sits BESIDE the arrow rather
+        // than along its pointing axis (which would put text on top of
+        // the chevron). Also shifted further from the arrow so the visual
+        // gap reads as deliberate.
         const label = this._waypointLabel();
         if (label) {
             const font = this.assets?.pixelFont;
@@ -5952,17 +5954,42 @@ export class Game {
                 const labelW = font.measure(label, 1);
                 const boxW = labelW + 6;
                 const boxH = 9;
-                // Offset opposite to the pointing direction so the label
-                // sits between the arrow and screen-center.
-                const labelOffset = 12;
-                const lx = Math.round(ax - Math.cos(angle) * labelOffset - boxW / 2);
-                const ly = Math.round(ay - Math.sin(angle) * labelOffset - boxH / 2);
+                // Determine which screen edge the arrow is closest to and
+                // place the label inside the screen on the perpendicular
+                // axis. Top edge -> label below; bottom -> above; left ->
+                // right; right -> left. This avoids the arrow body
+                // entirely and keeps the label fully on-screen.
+                let lx;
+                let ly;
+                const distTop = ay - margin;
+                const distBottom = (NATIVE_HEIGHT - margin) - ay;
+                const distLeft = ax - margin;
+                const distRight = (NATIVE_WIDTH - margin) - ax;
+                const minDist = Math.min(distTop, distBottom, distLeft, distRight);
+                const gap = 14;
+                if (minDist === distTop) {
+                    // arrow on top edge -> label below
+                    lx = Math.round(ax - boxW / 2);
+                    ly = Math.round(ay + gap);
+                } else if (minDist === distBottom) {
+                    // arrow on bottom edge -> label above
+                    lx = Math.round(ax - boxW / 2);
+                    ly = Math.round(ay - gap - boxH);
+                } else if (minDist === distLeft) {
+                    // arrow on left edge -> label to the right
+                    lx = Math.round(ax + gap);
+                    ly = Math.round(ay - boxH / 2);
+                } else {
+                    // arrow on right edge -> label to the left
+                    lx = Math.round(ax - gap - boxW);
+                    ly = Math.round(ay - boxH / 2);
+                }
                 // Clamp inside the screen edges so we never spill off.
                 const clampedX = Math.max(2, Math.min(NATIVE_WIDTH - boxW - 2, lx));
                 const clampedY = Math.max(2, Math.min(NATIVE_HEIGHT - boxH - 2, ly));
-                ctx.fillStyle = `rgba(7, 11, 19, ${(0.78 + pulse * 0.12).toFixed(3)})`;
+                ctx.fillStyle = `rgba(7, 11, 19, ${(0.82 + pulse * 0.10).toFixed(3)})`;
                 ctx.fillRect(clampedX, clampedY, boxW, boxH);
-                ctx.strokeStyle = `rgba(255, 222, 138, ${(0.45 + pulse * 0.30).toFixed(3)})`;
+                ctx.strokeStyle = `rgba(255, 222, 138, ${(0.50 + pulse * 0.30).toFixed(3)})`;
                 ctx.lineWidth = 1;
                 ctx.strokeRect(clampedX + 0.5, clampedY + 0.5, boxW - 1, boxH - 1);
                 font.draw(ctx, label, clampedX + 3, clampedY + 2, { color: accent });
@@ -6137,11 +6164,12 @@ export class Game {
         if (this.settings.showHints && !enemyNearby && !interactPromptActive && !bossActive
             && (showPersistentDirective || showShortHint)) {
             if (showPersistentDirective) {
-                // Pulsing amber banner so the eye returns to it even if the
-                // player has been ignoring it. Box is sized to fit the
-                // longest line at 1x scale -- pixel font is 6 px/char.
+                // Modern UI banner: dark gradient panel + slim amber accent
+                // stripe on the left edge + subtle pulse on the border.
+                // Sized dynamically to whichever line is longer so future
+                // copy changes don't need width tuning.
                 const pulse = Math.sin(this.gameTime * 4) * 0.5 + 0.5;
-                const alpha = 0.85 + pulse * 0.10;
+                const alpha = 0.92;
                 const headlineByPhase = {
                     'find-elara':  'OBJECTIVE: FIND ELARA',
                     'enter-portal': 'OBJECTIVE: ENTER AMBERWAKE GATE',
@@ -6155,19 +6183,43 @@ export class Game {
                 const headW = font.measure(head, 1);
                 const subW = font.measure(sub, 1);
                 const innerW = Math.max(headW, subW);
-                const boxW = Math.min(NATIVE_WIDTH - 24, innerW + 12);
+                // Padding: 8 px content padding + 3 px accent stripe on
+                // the left = 11 px chrome on left, 8 px on right -> 19 px
+                // chrome total. Cap to NATIVE_WIDTH - 24 so the box
+                // never touches the screen edges.
+                const boxW = Math.min(NATIVE_WIDTH - 24, innerW + 19);
+                const boxH = 22;
                 const boxX = Math.round((NATIVE_WIDTH - boxW) / 2);
-                const boxY = NATIVE_HEIGHT - 26;
-                ctx.fillStyle = `rgba(7, 11, 19, ${(0.78 + pulse * 0.10).toFixed(3)})`;
-                ctx.fillRect(boxX, boxY, boxW, 20);
-                ctx.strokeStyle = `rgba(255, 222, 138, ${(0.45 + pulse * 0.35).toFixed(3)})`;
+                const boxY = NATIVE_HEIGHT - boxH - 6;
+
+                // Gradient panel for a more "modern" surface than flat fill.
+                const panel = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+                panel.addColorStop(0, 'rgba(12, 18, 32, 0.94)');
+                panel.addColorStop(1, 'rgba(6, 9, 18, 0.96)');
+                ctx.fillStyle = panel;
+                ctx.fillRect(boxX, boxY, boxW, boxH);
+
+                // Slim amber accent stripe on the left edge -- a single
+                // graphic detail that immediately reads as deliberate UI.
+                const stripe = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+                stripe.addColorStop(0, '#ffd258');
+                stripe.addColorStop(1, '#c97f1e');
+                ctx.fillStyle = stripe;
+                ctx.fillRect(boxX, boxY, 3, boxH);
+
+                // Subtle outer border, gently pulsing.
+                ctx.strokeStyle = `rgba(255, 222, 138, ${(0.32 + pulse * 0.22).toFixed(3)})`;
                 ctx.lineWidth = 1;
-                ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, 19);
-                // Center each line individually within the box.
-                const headX = boxX + Math.round((boxW - headW) / 2);
-                const subX = boxX + Math.round((boxW - subW) / 2);
-                font.draw(ctx, head, headX, NATIVE_HEIGHT - 22, { color: '#ffe78a', alpha });
-                font.draw(ctx, sub, subX, NATIVE_HEIGHT - 13, { color: '#dff6ff', alpha });
+                ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+
+                // Text: headline in amber, sub in cool white. Both centered
+                // within the content area (right of the accent stripe).
+                const contentX = boxX + 3;
+                const contentW = boxW - 3;
+                const headX = contentX + Math.round((contentW - headW) / 2);
+                const subX = contentX + Math.round((contentW - subW) / 2);
+                font.draw(ctx, head, headX, boxY + 4, { color: '#ffe78a', alpha });
+                font.draw(ctx, sub, subX, boxY + 13, { color: '#cfe8ff', alpha: 0.88 });
             } else {
                 const alpha = this.gameTime < 7 ? 1 : 1 - (this.gameTime - 7) / 3;
                 // Show the combat hint only after the player has actually been
