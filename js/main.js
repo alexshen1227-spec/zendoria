@@ -1,5 +1,5 @@
-import { loadGameAssets } from './assets.js?v=20260509-art-pass';
-import { Game } from './game.js?v=20260509-art-pass';
+import { loadGameAssets } from './assets.js?v=20260427-round2';
+import { Game } from './game.js?v=20260428-true-fullscreen';
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('resetSave') === '1') {

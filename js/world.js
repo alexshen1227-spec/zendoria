@@ -1,4 +1,4 @@
-import { TILE } from './constants.js?v=20260416-realm-split';
+﻿import { TILE } from './constants.js?v=20260416-realm-split';
 
 const SOLID = new Set([0, 1, 6, 7, 8]);
 const SOLID_BOAT = new Set([2, 3, 4, 5, 6, 7, 8]);
@@ -183,14 +183,14 @@ export class World {
             { id: 'shrine-driftmere-ward', kind: 'ward', x: 48 * TILE + 8, y: 58 * TILE + 14 },
         ];
 
-        // Aether Font — a crystalline tide-shrine. Visible from spawn, placed
+        // Aether Font â€” a crystalline tide-shrine. Visible from spawn, placed
         // just east of Starfall Camp so the player bumps into it on the way
         // to everything else.
         this.aetherFontSpawns = [
             { id: 'aether-font-drift-01', x: 32 * TILE + 8, y: 30 * TILE + 14 },
         ];
 
-        // Mnemoforge — a Zen'Korah respec altar. Tucked into the southern
+        // Mnemoforge â€” a Zen'Korah respec altar. Tucked into the southern
         // beach where the existing Shardfang path naturally leads, so no new
         // traversal route is required.
         this.mnemoforgeSpawns = [
@@ -578,31 +578,31 @@ export class World {
             { kind: 'duneWarden', x: 88 * TILE + 2, y: 20 * TILE + 2 },
             { kind: 'blightworm', x: 83 * TILE + 2, y: 66 * TILE + 2 },
 
-            // Rushers — canyon biome (rocky/cave)
+            // Rushers â€” canyon biome (rocky/cave)
             { kind: 'rusher', x: 78 * TILE + 2, y: 18 * TILE + 2 },
             { kind: 'rusher', x: 84 * TILE + 2, y: 22 * TILE + 2 },
             { kind: 'rusher', x: 92 * TILE + 2, y: 16 * TILE + 2 },
             { kind: 'rusher', x: 100 * TILE + 2, y: 24 * TILE + 2 },
 
-            // Tactical Archers — salt flats (open sightlines for ranged)
+            // Tactical Archers â€” salt flats (open sightlines for ranged)
             { kind: 'tacticalArcher', x: 22 * TILE + 2, y: 48 * TILE + 2 },
             { kind: 'tacticalArcher', x: 28 * TILE + 2, y: 56 * TILE + 2 },
             { kind: 'tacticalArcher', x: 18 * TILE + 2, y: 60 * TILE + 2 },
 
-            // Goliath — tropics ruins (heavy boss-tier near submerged ruins)
+            // Goliath â€” tropics ruins (heavy boss-tier near submerged ruins)
             { kind: 'goliath', x: 70 * TILE + 2, y: 64 * TILE + 2 },
             { kind: 'goliath', x: 64 * TILE + 2, y: 70 * TILE + 2 },
         ];
 
         this.enemySpawnNodes = [
-            // Original — tightened for livelier desert traffic
+            // Original â€” tightened for livelier desert traffic
             { kind: 'sunscarab', x: 30 * TILE + 8, y: 58 * TILE + 8, interval: 10, maxAlive: 3, leashRadius: 80, activationRadius: 280 },
             { kind: 'duneWarden', x: 94 * TILE + 8, y: 22 * TILE + 8, interval: 14, maxAlive: 2, leashRadius: 86, activationRadius: 280 },
             { kind: 'blightworm', x: 82 * TILE + 8, y: 63 * TILE + 8, interval: 10, maxAlive: 3, leashRadius: 82, activationRadius: 280 },
             { kind: 'sunscarab', x: 68 * TILE + 8, y: 44 * TILE + 8, interval: 11, maxAlive: 3, leashRadius: 84, activationRadius: 280 },
             { kind: 'duneWarden', x: 58 * TILE + 8, y: 36 * TILE + 8, interval: 15, maxAlive: 2, leashRadius: 80, activationRadius: 260 },
 
-            // Rusher swarms in the canyons — fast, low HP, frequent
+            // Rusher swarms in the canyons â€” fast, low HP, frequent
             { kind: 'rusher', x: 86 * TILE + 8, y: 20 * TILE + 8, interval: 7, maxAlive: 4, leashRadius: 96, activationRadius: 280 },
             { kind: 'rusher', x: 96 * TILE + 8, y: 18 * TILE + 8, interval: 7, maxAlive: 4, leashRadius: 96, activationRadius: 280 },
             { kind: 'rusher', x: 78 * TILE + 8, y: 22 * TILE + 8, interval: 9, maxAlive: 3, leashRadius: 90, activationRadius: 260 },
@@ -615,14 +615,14 @@ export class World {
             // Goliath in the tropics ruins (rare, slow respawn)
             { kind: 'goliath', x: 72 * TILE + 8, y: 66 * TILE + 8, interval: 40, maxAlive: 1, leashRadius: 120, activationRadius: 280 },
 
-            // Expanded frontier — eastern wasteland
+            // Expanded frontier â€” eastern wasteland
             { kind: 'duneWarden', x: 140 * TILE + 8, y: 40 * TILE + 8, interval: 13, maxAlive: 2, leashRadius: 96, activationRadius: 300 },
             { kind: 'sunscarab', x: 152 * TILE + 8, y: 50 * TILE + 8, interval: 10, maxAlive: 3, leashRadius: 90, activationRadius: 280 },
             { kind: 'rusher', x: 148 * TILE + 8, y: 22 * TILE + 8, interval: 8, maxAlive: 3, leashRadius: 96, activationRadius: 260 },
             { kind: 'blightworm', x: 160 * TILE + 8, y: 68 * TILE + 8, interval: 12, maxAlive: 2, leashRadius: 80, activationRadius: 260 },
             { kind: 'tacticalArcher', x: 162 * TILE + 8, y: 62 * TILE + 8, interval: 18, maxAlive: 2, leashRadius: 120, activationRadius: 340 },
 
-            // Expanded frontier — deep-south wildlands
+            // Expanded frontier â€” deep-south wildlands
             { kind: 'blightworm', x: 80 * TILE + 8, y: 100 * TILE + 8, interval: 11, maxAlive: 3, leashRadius: 84, activationRadius: 280 },
             { kind: 'duneWarden', x: 98 * TILE + 8, y: 108 * TILE + 8, interval: 15, maxAlive: 2, leashRadius: 86, activationRadius: 280 },
             { kind: 'sunscarab', x: 58 * TILE + 8, y: 102 * TILE + 8, interval: 11, maxAlive: 3, leashRadius: 88, activationRadius: 280 },
@@ -641,7 +641,7 @@ export class World {
             { id: 'lore-frontier-05', x: 50 * TILE + 8, y: 50 * TILE + 14, title: 'CROSSROADS STELE', body: 'FOUR WINDS MEET HERE. EACH CARRIES A DIFFERENT END.' },
             { id: 'lore-frontier-06', x: 101 * TILE + 8, y: 34 * TILE + 14, title: 'DUNE-BLED CAIRN', body: 'A SCOUT DIED MAPPING THIS ROUTE. HIS COMPASS STILL POINTS TRUE.' },
             // Expanded frontier lore
-            { id: 'lore-frontier-07', x: 140 * TILE + 8, y: 42 * TILE + 14, title: 'BURNT-PLAIN CAIRN', body: 'EASTWARD LIES THE BURNT PLAIN. SUN SETS TWICE HERE — ONCE AT DUSK, ONCE BENEATH THE SAND.' },
+            { id: 'lore-frontier-07', x: 140 * TILE + 8, y: 42 * TILE + 14, title: 'BURNT-PLAIN CAIRN', body: 'EASTWARD LIES THE BURNT PLAIN. SUN SETS TWICE HERE â€” ONCE AT DUSK, ONCE BENEATH THE SAND.' },
             { id: 'lore-frontier-08', x: 158 * TILE + 8, y: 48 * TILE + 14, title: 'OBELISK OF CRACKED SKY', body: 'THE SIXTH PILLAR STOOD HERE. IT FELL WHEN THE WORM WOKE.' },
             { id: 'lore-frontier-09', x: 148 * TILE + 8, y: 24 * TILE + 14, title: 'STONE CIRCLE MARKER', body: 'PILGRIMS LEFT OFFERINGS AT EACH STONE. TIME TOOK ALL BUT THE STONES.' },
             { id: 'lore-frontier-10', x: 162 * TILE + 8, y: 60 * TILE + 14, title: 'WATCHTOWER STELE', body: 'THE LAST WATCHER SAW THREE BANNERS ADVANCE. HE RANG THE BELL ANYWAY.' },
@@ -660,7 +660,7 @@ export class World {
             { id: 'shrine-frontier-ward-east', kind: 'ward', x: 162 * TILE + 8, y: 66 * TILE + 14 },
         ];
 
-        // Frontier has no Aether Font yet — reserved for future expansion.
+        // Frontier has no Aether Font yet â€” reserved for future expansion.
         this.aetherFontSpawns = [];
         this.mnemoforgeSpawns = [];
 
@@ -1088,7 +1088,7 @@ export class World {
         this._addLandMass(height, 30, 58, 14, 10, 0.88);
         this._addLandMass(height, 48, 60, 16, 12, 0.95);
         this._addLandMass(height, 64, 56, 12, 9, 0.6);
-        // Offshore isles — reachable only by rowboat.
+        // Offshore isles â€” reachable only by rowboat.
         this._addLandMass(height, 78, 50, 7, 6, 0.78);
         this._addLandMass(height, 88, 42, 8, 7, 0.82);
         this._addLandMass(height, 96, 54, 7, 6, 0.74);
@@ -1242,7 +1242,7 @@ export class World {
         this._paintPathLine(map, 58, 48, 38, 50, 1.2);
         this._paintPathLine(map, 38, 50, 24, 50, 1.25);
 
-        // Eastern caravan road — Dustwake to the far-east wasteland (crosses shallows)
+        // Eastern caravan road â€” Dustwake to the far-east wasteland (crosses shallows)
         this._paintPathLine(map, 100, 46, 120, 42, 1.4, true);
         this._paintPathLine(map, 120, 42, 140, 40, 1.4, true);
         this._paintPathLine(map, 140, 40, 158, 44, 1.25);
@@ -1254,7 +1254,7 @@ export class World {
         this._paintPatch(map, 158, 44, 2.8, 2.2, 5);
         this._paintPatch(map, 162, 62, 2.6, 2.0, 5);
 
-        // Southbound road — tropics to deep-south wildlands (crosses shallows)
+        // Southbound road â€” tropics to deep-south wildlands (crosses shallows)
         this._paintPathLine(map, 63, 76, 68, 82, 1.3, true);
         this._paintPathLine(map, 68, 82, 80, 90, 1.3, true);
         this._paintPathLine(map, 80, 90, 92, 100, 1.25, true);
@@ -1266,7 +1266,7 @@ export class World {
         this._paintPatch(map, 98, 100, 3.2, 2.4, 5);
         this._paintPatch(map, 135, 95, 2.4, 2.0, 5);
 
-        // Western route — salt flats down to southern basin (crosses shallows)
+        // Western route â€” salt flats down to southern basin (crosses shallows)
         this._paintPathLine(map, 24, 60, 28, 78, 1.3, true);
         this._paintPathLine(map, 28, 78, 40, 92, 1.25, true);
         this._paintPathLine(map, 40, 92, 56, 100, 1.2, true);
@@ -1431,9 +1431,6 @@ export class World {
                 sortY: 53 * TILE,
             });
 
-            pushProp('bannerThreeAsh', 159.2, 61.6, { scale: 0.75, blocking: true, footprintW: 8, footprintH: 5 });
-            pushProp('bannerThreeTide', 156.6, 64.0, { scale: 0.75, blocking: true, footprintW: 8, footprintH: 5 });
-            pushProp('bannerThreeStar', 162.0, 65.2, { scale: 0.75, blocking: true, footprintW: 8, footprintH: 5 });
         } else {
             pushProp('pineTall', 15.5, 26.2, { scale: 0.72, blocking: true, footprintW: 12, footprintH: 6 });
             pushProp('pineMid', 20.0, 22.8, { scale: 0.72, blocking: true, footprintW: 12, footprintH: 6 });
@@ -2454,7 +2451,7 @@ export class World {
         // Axle
         ctx.fillStyle = '#2c2419';
         ctx.fillRect(x - 1, y - 7, 2, 2);
-        // Rotating blades — two crossed rectangles rotated by spin
+        // Rotating blades â€” two crossed rectangles rotated by spin
         const bladeColor = '#e4d5a2';
         const bladeShadow = '#a89768';
         const hubX = x;

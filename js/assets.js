@@ -1,4 +1,4 @@
-import { PixelFont } from './pixelText.js?v=20260414-no-bridge-pass2';
+﻿import { PixelFont } from './pixelText.js?v=20260414-no-bridge-pass2';
 import { loadImage, SpriteSheet } from './sprite.js?v=20260414-no-bridge-pass2';
 import { ENEMY_CONFIGS } from './enemy.js?v=20260509-wormp-art';
 import { ITEM_DEFINITIONS } from './itemData.js?v=20260509-art-pass';
@@ -34,9 +34,6 @@ const ENVIRONMENT_PROP_FILES = {
     tropicsRuins: 'assets/sprites/biomes/tropics_ruins.png',
     tropicsRuinWall: 'assets/sprites/biomes/tropics_ruin_wall.png',
     tropicsPalmGlow: 'assets/sprites/biomes/tropics_palm_glow.png',
-    bannerThreeAsh: 'assets/banners/banner_three_ash.png',
-    bannerThreeTide: 'assets/banners/banner_three_tide.png',
-    bannerThreeStar: 'assets/banners/banner_three_star.png',
 };
 
 const PILLAR_SHEET_FILES = {
@@ -617,7 +614,7 @@ function prepareGeneratedNpcSprite(image) {
     // Source PNGs already have transparent backgrounds (alpha=0 corners).
     // Running the dark-matte flood here would fill inward through the
     // transparent border and erase any opaque pixel where R/G/B are all
-    // below the threshold — i.e. the figure's hair, shadows, dark clothing,
+    // below the threshold â€” i.e. the figure's hair, shadows, dark clothing,
     // and outline edges. That destroyed 28-80% of every NPC's pixels.
     // Just trim to visible bounds and let fitSpriteToBox do the rest.
     const cleaned = trimTransparentBounds(image, 1);
