@@ -545,6 +545,7 @@ export class World {
             southCamp: { x: 98 * TILE + 8, y: 105 * TILE + 8, label: 'ROADEND CAMP' },
             wreck: { x: 36 * TILE + 8, y: 92 * TILE + 8, label: 'SALT-WRECK' },
             brokenArch: { x: 135 * TILE + 8, y: 95 * TILE + 8, label: 'BROKEN ARCH' },
+            tidereach: { x: 120 * TILE + 8, y: 108 * TILE + 8, label: 'TIDEREACH LAGOON' },
         };
 
         this.fixedEnemySpawns = [
@@ -571,6 +572,13 @@ export class World {
             // Goliath — tropics ruins (heavy boss-tier near submerged ruins)
             { kind: 'goliath', x: 70 * TILE + 2, y: 64 * TILE + 2 },
             { kind: 'goliath', x: 64 * TILE + 2, y: 70 * TILE + 2 },
+
+            // Tidereach lagoon picket (fixed introductions for the new
+            // coral crawler and deepveil specter; players meeting them
+            // for the first time spot a static pair before the spawn
+            // nodes start producing waves).
+            { kind: 'coralCrawler', x: 115 * TILE + 2, y: 104 * TILE + 2 },
+            { kind: 'deepveilSpecter', x: 122 * TILE + 2, y: 110 * TILE + 2 },
         ];
 
         this.enemySpawnNodes = [
@@ -610,6 +618,14 @@ export class World {
 
             // Salt flats southern extension
             { kind: 'tacticalArcher', x: 28 * TILE + 8, y: 90 * TILE + 8, interval: 17, maxAlive: 2, leashRadius: 108, activationRadius: 320 },
+
+            // Tidereach lagoon — coral crawlers + deepveil specters cluster
+            // around the southern wetland. New enemy variants gated behind the
+            // Sunken Relic so first-time players don't meet them too early.
+            { kind: 'coralCrawler', x: 110 * TILE + 8, y: 100 * TILE + 8, interval: 11, maxAlive: 3, leashRadius: 84, activationRadius: 280 },
+            { kind: 'coralCrawler', x: 124 * TILE + 8, y: 108 * TILE + 8, interval: 12, maxAlive: 3, leashRadius: 86, activationRadius: 280 },
+            { kind: 'deepveilSpecter', x: 118 * TILE + 8, y: 112 * TILE + 8, interval: 14, maxAlive: 2, leashRadius: 96, activationRadius: 300 },
+            { kind: 'deepveilSpecter', x: 132 * TILE + 8, y: 102 * TILE + 8, interval: 16, maxAlive: 2, leashRadius: 96, activationRadius: 300 },
         ];
 
         this.loreStoneSpawns = [
@@ -628,6 +644,10 @@ export class World {
             { id: 'lore-frontier-12', x: 80 * TILE + 8, y: 98 * TILE + 14, title: 'WELL-STONE EPITAPH', body: 'THIS WELL WAS DRY BEFORE I WAS BORN. IT STILL DRINKS WHAT FALLS INTO IT.' },
             { id: 'lore-frontier-13', x: 135 * TILE + 8, y: 93 * TILE + 14, title: 'BROKEN-ARCH RUNE', body: 'WHERE THE GATE STOOD, NO GATEKEEPERS REMAIN. THE WAY IS OPEN. WALK IT KNOWING.' },
             { id: 'lore-frontier-14', x: 36 * TILE + 8, y: 90 * TILE + 14, title: 'SALT-WRECK EPITAPH', body: 'THIS SHIP SAILED SAND, NOT SEA. ITS CREW BELIEVED THE DUNES WOULD CARRY THEM HOME.' },
+            // Tidereach lagoon stones — set up the new biome's identity
+            { id: 'lore-frontier-15', x: 112 * TILE + 8, y: 102 * TILE + 14, title: 'TIDESTAINED MARKER', body: 'A LAGOON WHERE SUNCLEFT MEETS UNDERSEA. CORAL GROWS WHERE SAND WAS, AND THE DEAD LISTEN.' },
+            { id: 'lore-frontier-16', x: 126 * TILE + 8, y: 108 * TILE + 14, title: 'BLACK PEARL PLINTH', body: 'PEARL DIVERS LEFT NAMES HERE. SOMETHING ELSE LEFT TEETH MARKS.' },
+            { id: 'lore-frontier-17', x: 130 * TILE + 8, y: 116 * TILE + 14, title: 'DEEPVEIL EPITAPH', body: 'THE SPECTERS WERE PEOPLE ONCE. THEY DROWNED CHASING A LIGHT THAT WAS NEVER THERE.' },
         ];
 
         this.shrineSpawns = [
@@ -937,6 +957,91 @@ export class World {
                 },
             },
             {
+                id: 'osric-pearl-keeper',
+                name: 'Osric',
+                title: 'Pearl Keeper',
+                promptLabel: 'OSRIC',
+                variant: 'lantern-keeper',
+                x: 120 * TILE,
+                y: 105 * TILE,
+                effect: {
+                    type: 'quest',
+                    once: true,
+                    require: {
+                        requireAbility: true,
+                        enemyKills: { kind: 'deepveilSpecter', count: 2, label: 'SPECTERS' },
+                    },
+                    reward: {
+                        xp: 95,
+                        skillPoints: 1,
+                        buffId: 'ward',
+                        buffName: 'PEARL WARD',
+                        duration: 60,
+                        color: '#bde9ff',
+                    },
+                    toast: 'PEARL WARD KINDLED',
+                    progressToast: 'OSRIC HEARS THE SPECTERS STILL DRIFTING',
+                },
+                dialog: {
+                    active: [
+                        'The lagoon was a pearl bed before the worm cracked the sky.',
+                        'Drop two of the deepveils that drift through these reeds. Their silence is worth more than coin. Progress: {progress}.',
+                    ],
+                    repeat: [
+                        'The reeds still flicker. I have heard {progress}. The water will tell me when the last one falls.',
+                    ],
+                    ready: [
+                        'The reeds are quiet at last. The pearls trust the lagoon again.',
+                        'Take a ward shaped from the deepest shell. It listens for what wants to drown you.',
+                    ],
+                    used: [
+                        'The ward listens through your bones now. Do not stand too long in still water.',
+                    ],
+                },
+            },
+            {
+                id: 'sable-coral-warden',
+                name: 'Sable',
+                title: 'Coral Warden',
+                promptLabel: 'SABLE',
+                variant: 'glow-warden',
+                x: 128 * TILE,
+                y: 112 * TILE,
+                effect: {
+                    type: 'quest',
+                    once: true,
+                    require: {
+                        requireAbility: true,
+                        enemyKills: { kind: 'coralCrawler', count: 4, label: 'CRAWLERS' },
+                    },
+                    reward: {
+                        xp: 70,
+                        buffId: 'might',
+                        buffName: 'CORAL EDGE',
+                        duration: 55,
+                        color: '#ff9fbf',
+                    },
+                    toast: 'CORAL EDGE HONED',
+                    progressToast: 'SABLE NEEDS FOUR CRAWLERS THINNED',
+                },
+                dialog: {
+                    active: [
+                        'The crawlers are eating the reef into spurs. We will not have a lagoon by next moon.',
+                        'Thin four of them. I will hone a coral edge into your blade. Progress: {progress}.',
+                    ],
+                    repeat: [
+                        'I have counted {progress}. The reef is still hungry.',
+                    ],
+                    ready: [
+                        'You bought the lagoon time. The reef breathes again.',
+                        'Hold steady. I will set a coral edge on your blade -- it sings when it bites.',
+                    ],
+                    used: [
+                        'The edge holds. Do not let it forget the taste of crawler-shell.',
+                    ],
+                },
+            },
+            {
                 id: 'halden-starherd',
                 name: 'Halden',
                 title: 'Steppe Starherd',
@@ -992,6 +1097,7 @@ export class World {
             { type: 'camp', x: this.landmarks.southCamp.x, y: this.landmarks.southCamp.y, label: this.landmarks.southCamp.label },
             { type: 'wreck', x: this.landmarks.wreck.x, y: this.landmarks.wreck.y, label: this.landmarks.wreck.label },
             { type: 'ruins', x: this.landmarks.brokenArch.x, y: this.landmarks.brokenArch.y, label: this.landmarks.brokenArch.label },
+            { type: 'tropics', x: this.landmarks.tidereach.x, y: this.landmarks.tidereach.y, label: this.landmarks.tidereach.label },
         ];
     }
 

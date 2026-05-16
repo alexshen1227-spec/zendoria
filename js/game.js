@@ -36,7 +36,7 @@ const TITLE_MENU_STATE_SOURCES = {
 };
 
 const TITLE_OPTION_KEYS = ['sound', 'hints'];
-const PAUSE_MENU_KEYS = ['resume', 'sound', 'hints', 'controls', 'return-title'];
+const PAUSE_MENU_KEYS = ['resume', 'sound', 'hints', 'reducedMotion', 'largeText', 'colorblind', 'controls', 'return-title'];
 
 // === Day/Night cycle =======================================================
 // 8 minutes (480 s) for a full DAWN -> DAY -> DUSK -> NIGHT -> DAWN loop.
@@ -1624,12 +1624,14 @@ export class Game {
 
         const selected = PAUSE_MENU_KEYS[this.pauseMenuIndex];
 
-        // Toggle rows (Sound, Hints) respond to arrow keys only. Drill-in rows
-        // (Controls) and action rows (Resume, Return To Title) respond to
-        // Enter/Space. Previously Enter also toggled Sound/Hints, which caused
-        // Default Sim to accidentally turn them off while navigating down to
-        // Controls. Source: P1-3 from 2026-04-26 playtest meta-analysis.
-        if (selected === 'sound' || selected === 'hints') {
+        // Toggle rows (Sound, Hints, and the 3 accessibility toggles) respond
+        // to arrow keys only. Drill-in rows (Controls) and action rows
+        // (Resume, Return To Title) respond to Enter/Space. Previously Enter
+        // also toggled Sound/Hints, which caused Default Sim to accidentally
+        // turn them off while navigating down to Controls. Source: P1-3 from
+        // 2026-04-26 playtest meta-analysis.
+        if (selected === 'sound' || selected === 'hints' ||
+            selected === 'reducedMotion' || selected === 'largeText' || selected === 'colorblind') {
             if (
                 this.input.wasPressed('ArrowLeft') ||
                 this.input.wasPressed('ArrowRight') ||
@@ -1675,6 +1677,9 @@ export class Game {
         } else if (key === 'hints') {
             this.settings.showHints = !this.settings.showHints;
             this._saveSettings();
+        } else if (key === 'reducedMotion' || key === 'largeText' || key === 'colorblind') {
+            this.settings[key] = !this.settings[key];
+            this._saveSettings();
         }
 
         this._playBeep(740, 0.06, 'triangle', 0.1);
@@ -1691,8 +1696,9 @@ export class Game {
 
         if (this.pauseHelp) {
             const selected = PAUSE_MENU_KEYS[this.pauseMenuIndex];
-            if (selected === 'sound' || selected === 'hints') {
-                this.pauseHelp.textContent = 'LEFT OR RIGHT TO TOGGLE. ENTER ALSO TOGGLES. ESC RESUMES.';
+            if (selected === 'sound' || selected === 'hints' ||
+                selected === 'reducedMotion' || selected === 'largeText' || selected === 'colorblind') {
+                this.pauseHelp.textContent = 'LEFT OR RIGHT TO TOGGLE. ESC RESUMES.';
             } else if (selected === 'controls') {
                 this.pauseHelp.textContent = 'ENTER OR SPACE OPENS THE CONTROLS LIST.';
             } else if (selected === 'return-title') {
@@ -1706,9 +1712,11 @@ export class Game {
     _pauseValueText(key) {
         switch (key) {
             case 'sound':
-                return this._settingTextValue('sound');
             case 'hints':
-                return this._settingTextValue('hints');
+            case 'reducedMotion':
+            case 'largeText':
+            case 'colorblind':
+                return this._settingTextValue(key);
             case 'resume':
                 return 'GO';
             case 'controls':
@@ -1723,6 +1731,9 @@ export class Game {
     _settingTextValue(key) {
         if (key === 'sound') return this.settings.soundEnabled ? 'ON' : 'OFF';
         if (key === 'hints') return this.settings.showHints ? 'ON' : 'OFF';
+        if (key === 'reducedMotion') return this.settings.reducedMotion ? 'ON' : 'OFF';
+        if (key === 'largeText') return this.settings.largeText ? 'ON' : 'OFF';
+        if (key === 'colorblind') return this.settings.colorblind ? 'ON' : 'OFF';
         return '';
     }
 
@@ -1750,6 +1761,18 @@ export class Game {
             }
             if (typeof save.settings.soundEnabled === 'boolean') {
                 this.settings.soundEnabled = save.settings.soundEnabled;
+            }
+            // Accessibility toggles. Legacy saves without these fields keep
+            // the existing in-memory defaults from _loadSettings (which read
+            // from the dedicated settings key, not the run snapshot).
+            if (typeof save.settings.reducedMotion === 'boolean') {
+                this.settings.reducedMotion = save.settings.reducedMotion;
+            }
+            if (typeof save.settings.largeText === 'boolean') {
+                this.settings.largeText = save.settings.largeText;
+            }
+            if (typeof save.settings.colorblind === 'boolean') {
+                this.settings.colorblind = save.settings.colorblind;
             }
             this._saveSettings();
         }
@@ -2592,7 +2615,7 @@ export class Game {
             if (npc.cooldown > 0) return;
             this.player.grantShrineBuff(effect.buffId, effect.duration);
             npc.setCooldown(effect.cooldown);
-            this.toast = `${effect.buffName || effect.buffId.toUpperCase()} Â· ${effect.duration}S`;
+            this.toast = `${effect.buffName || effect.buffId.toUpperCase()} · ${effect.duration}S`;
             this.toastTimer = 2.2;
             this._playBeep(840, 0.1, 'triangle', 0.14);
             this._playBeep(1120, 0.14, 'sine', 0.1);
@@ -4082,14 +4105,18 @@ export class Game {
     _drawDamageNumbers(ctx) {
         if (!this.damageNumbers || this.damageNumbers.length === 0) return;
         const font = this.assets.pixelFont;
+        // Colorblind palette: avoid red/green pairing. Player damage shifts
+        // from red to bright orange (still hot but readable for deuteranopia),
+        // heal shifts from green to pale yellow.
+        const cb = this.settings.colorblind;
         for (const d of this.damageNumbers) {
             const t = 1 - d.timer / d.maxTimer;
             const alpha = d.timer > 0.18 ? 1 : Math.max(0, d.timer / 0.18);
             const popScale = t < 0.18 ? d.scale * (0.6 + (t / 0.18) * 0.4) : d.scale;
             const color = d.variant === 'player'
-                ? '#ff6b6b'
+                ? (cb ? '#ffa552' : '#ff6b6b')
                 : d.variant === 'heal'
-                    ? '#8dffc2'
+                    ? (cb ? '#fff2a6' : '#8dffc2')
                     : d.crit ? '#ffec80' : '#ffffff';
             const w = font.measure(d.text, popScale);
             const xOff = Math.round(d.x - w / 2);
@@ -4163,8 +4190,14 @@ export class Game {
             NATIVE_HEIGHT / 2,
             Math.max(NATIVE_WIDTH, NATIVE_HEIGHT) * 0.62,
         );
-        grad.addColorStop(0, 'rgba(180, 30, 30, 0)');
-        grad.addColorStop(1, `rgba(180, 30, 30, ${0.55 * intensity})`);
+        // Colorblind palette: replace the deep red with a desaturated
+        // amber-orange that still reads as "danger" but doesn't rely on red
+        // perception. Reduced motion: drop the pulse to ~half intensity.
+        const cb = this.settings.colorblind;
+        const motionMul = this.settings.reducedMotion ? 0.5 : 1;
+        const rgb = cb ? '210, 130, 30' : '180, 30, 30';
+        grad.addColorStop(0, `rgba(${rgb}, 0)`);
+        grad.addColorStop(1, `rgba(${rgb}, ${0.55 * intensity * motionMul})`);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
         ctx.restore();
@@ -4453,8 +4486,13 @@ export class Game {
         ctx.fillStyle = '#050814';
         ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
 
-        const shakeX = this.screenShake > 0 ? Math.round((Math.random() * 2 - 1) * this.screenShake * 2) : 0;
-        const shakeY = this.screenShake > 0 ? Math.round((Math.random() * 2 - 1) * this.screenShake * 2) : 0;
+        // Reduced Motion accessibility setting: damp camera shake to 25% of
+        // its natural amplitude so the world still pulses with weight but
+        // doesn't trigger motion sensitivity. We damp rather than zero out
+        // because zero shake reads as "the hit didn't land."
+        const motionScale = this.settings.reducedMotion ? 0.25 : 1;
+        const shakeX = this.screenShake > 0 ? Math.round((Math.random() * 2 - 1) * this.screenShake * 2 * motionScale) : 0;
+        const shakeY = this.screenShake > 0 ? Math.round((Math.random() * 2 - 1) * this.screenShake * 2 * motionScale) : 0;
 
         this.camera.begin(ctx, shakeX, shakeY);
         this.world.drawGround(ctx, this.camera.x, this.camera.y, NATIVE_WIDTH, NATIVE_HEIGHT, this.gameTime);
@@ -4490,7 +4528,10 @@ export class Game {
         if (this.started) this._drawOffscreenWaypointArrow(ctx);
         if (this.started) this._drawHUD(ctx);
         if (this.started && this.levelUpFlash > 0) {
-            ctx.fillStyle = `rgba(255, 244, 184, ${this.levelUpFlash * 0.55})`;
+            // Reduced motion: drop the bright full-screen flash intensity so
+            // the level-up still reads but no longer overwhelms the eye.
+            const flashIntensity = this.settings.reducedMotion ? 0.15 : 0.55;
+            ctx.fillStyle = `rgba(255, 244, 184, ${this.levelUpFlash * flashIntensity})`;
             ctx.fillRect(0, 0, NATIVE_WIDTH, NATIVE_HEIGHT);
         }
         if (this.started && this.levelUpAnim) this._drawLevelUpBanner(ctx);
@@ -6236,11 +6277,17 @@ export class Game {
         }
 
         if (this.toastTimer > 0 && this.toast) {
+            // Large Text accessibility: render the standard toast at 2x scale.
+            // This is the most reactive HUD channel; bumping it lets players
+            // who can't comfortably read 1x pixel font still parse feedback
+            // without forcing a HUD redesign for the rest of the layout.
+            const toastScale = this.settings.largeText ? 2 : 1;
+            const lineH = toastScale === 2 ? 16 : 8;
             const maxToastW = NATIVE_WIDTH - 20;
-            const lines = this._wrapPixelText(this.toast, maxToastW - 12, 1);
-            const lineWidths = lines.map((l) => font.measure(l, 1));
+            const lines = this._wrapPixelText(this.toast, maxToastW - 12, toastScale);
+            const lineWidths = lines.map((l) => font.measure(l, toastScale));
             const toastWidth = Math.max(90, Math.max(...lineWidths) + 12);
-            const toastH = 4 + lines.length * 8;
+            const toastH = 4 + lines.length * lineH;
             const toastX = Math.round((NATIVE_WIDTH - toastWidth) / 2);
             const beaconActive = this.hasLevelUpAbility && this.player.skillPoints > 0;
             const toastY = beaconActive ? 72 : (this.hasLevelUpAbility ? 56 : 42);
@@ -6248,7 +6295,7 @@ export class Game {
             ctx.fillRect(toastX, toastY, toastWidth, toastH);
             lines.forEach((line, i) => {
                 const lw = lineWidths[i];
-                font.draw(ctx, line, toastX + Math.round((toastWidth - lw) / 2), toastY + 2 + i * 8, { color: '#8df7d2' });
+                font.draw(ctx, line, toastX + Math.round((toastWidth - lw) / 2), toastY + 2 + i * lineH, { color: '#8df7d2', scale: toastScale });
             });
         }
 
@@ -6735,6 +6782,9 @@ export class Game {
             settings: {
                 showHints: this.settings.showHints,
                 soundEnabled: this.settings.soundEnabled,
+                reducedMotion: !!this.settings.reducedMotion,
+                largeText: !!this.settings.largeText,
+                colorblind: !!this.settings.colorblind,
             },
         };
     }
@@ -7071,12 +7121,21 @@ export class Game {
             return {
                 showHints: parsed.showHints !== false,
                 soundEnabled: parsed.soundEnabled !== false,
+                // Accessibility settings — default OFF so existing players get
+                // the same look they're used to. All three default false to
+                // preserve legacy save compatibility.
+                reducedMotion: parsed.reducedMotion === true,
+                largeText: parsed.largeText === true,
+                colorblind: parsed.colorblind === true,
             };
         } catch (error) {
             console.warn('Zendoria settings read failed:', error);
             return {
                 showHints: true,
                 soundEnabled: true,
+                reducedMotion: false,
+                largeText: false,
+                colorblind: false,
             };
         }
     }

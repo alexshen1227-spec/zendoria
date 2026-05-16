@@ -620,6 +620,33 @@ function prepareGeneratedNpcSprite(image) {
     };
 }
 
+// Placeholder image factory. Used by loadGameAssets when an optional sprite
+// file is missing on disk so the game still boots. The canvas is intentionally
+// painted as a checkered magenta/black pattern (the classic "missing texture"
+// signal) plus a printed kind label so the gap is visible in playtest.
+function makePlaceholderImage(w, h, label = '???') {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(8, w);
+    canvas.height = Math.max(8, h);
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const cell = 4;
+    for (let y = 0; y < canvas.height; y += cell) {
+        for (let x = 0; x < canvas.width; x += cell) {
+            const checker = ((x / cell) + (y / cell)) % 2 === 0;
+            ctx.fillStyle = checker ? '#ff00ff' : '#1a0a1a';
+            ctx.fillRect(x, y, cell, cell);
+        }
+    }
+    // Faint border so the placeholder reads as a rectangular agent.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.fillRect(0, 0, canvas.width, 1);
+    ctx.fillRect(0, canvas.height - 1, canvas.width, 1);
+    ctx.fillRect(0, 0, 1, canvas.height);
+    ctx.fillRect(canvas.width - 1, 0, 1, canvas.height);
+    return canvas;
+}
+
 function trimTransparentBounds(image, padding = 0) {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
@@ -745,7 +772,14 @@ export async function loadGameAssets() {
         loadImage('assets/reference/provided_pixel_art/Map.jpg'),
         loadImage('assets/sprites/pillars/pillar_sheet.png'),
         loadImage('assets/sprites/boss/sandworm_sheet.png'),
-        ...enemyEntries.map(([, config]) => loadImage(config.src)),
+        ...enemyEntries.map(([kind, config]) => loadImage(config.src).catch((error) => {
+            // New enemy kinds (e.g. coralCrawler, deepveilSpecter) may not have
+            // generated sprites yet; let the game boot without them by handing
+            // back a tiny placeholder rather than crashing the whole load step.
+            // Their spawns sit in unreleased realms and are gated behind data.
+            console.warn(`Zendoria: enemy sprite missing for ${kind}; using placeholder`, error);
+            return makePlaceholderImage(config.frameW || 32, config.frameH || 32, config.kind || kind);
+        })),
         ...generatedNpcEntries.map(([id, src]) => loadImage(src).catch((error) => {
             console.warn(`Zendoria: optional generated NPC art failed for ${id}`, error);
             return null;
